@@ -109,7 +109,7 @@ function Api() {
       </p>
       <H>How the key is handled</H>
       <p>
-        The TMDb API key is managed securely on the local backend server (configured via <code>API.txt</code> in the project root)
+        The TMDb API key is managed securely on the local backend server (configured via a <code>TMDB_KEY</code> environment variable or a gitignored <code>.env</code> file in the project root)
         and proxied automatically. No credentials or API keys are exposed to the client or stored in the browser.
       </p>
       <H>Rate limits</H>
