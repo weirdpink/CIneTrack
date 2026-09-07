@@ -215,7 +215,7 @@ export default function TitleDetail({
       >
         <header className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-border bg-background px-6 py-3">
           <span className="rule-label">
-            Catalogue entry · {type === 'movie' ? 'Feature' : 'Series'} · #{id}
+            Catalogue entry · {type === 'movie' ? 'Movie' : 'Series'} · #{id}
           </span>
           <button
             onClick={onClose}

@@ -31,7 +31,7 @@ export default function Home({ onOpen }: { onOpen: (t: MediaType, id: number, se
     }
   }, [entries])
 
-  const activity = useMemo(() => recentCompletions(entries, 8), [entries])
+  const activity = useMemo(() => recentCompletions(entries, 7), [entries])
   const hasData = entries.length > 0
 
   const [shuffleKey, setShuffleKey] = useState(0)
@@ -73,12 +73,14 @@ export default function Home({ onOpen }: { onOpen: (t: MediaType, id: number, se
           <Empty>Nothing underway — visit Discover to begin a title</Empty>
         ) : (
           <div className="grid gap-px border border-border bg-border md:grid-cols-2">
-            {stats.inProgress.slice(0, 6).map((e, i) => (
+            {stats.inProgress.slice(0, 2).map((e, i) => (
               <button
                 key={`${e.mediaType}-${e.id}`}
                 onClick={() => onOpen(e.mediaType, e.id)}
                 style={{ animationDelay: `${i * 55}ms` }}
-                className="group animate-rise flex items-center gap-4 bg-background p-4 text-left transition-colors duration-300 hover:bg-card"
+                className={`group animate-rise flex items-center gap-4 bg-background p-4 text-left transition-colors duration-300 hover:bg-card ${
+                  stats.inProgress.length === 1 ? 'md:col-span-2' : ''
+                }`}
               >
                 {img(e.poster, 'w185') && (
                   <img
@@ -147,7 +149,7 @@ export default function Home({ onOpen }: { onOpen: (t: MediaType, id: number, se
           )}
         </div>
 
-        <div>
+        <div className="flex flex-col">
           <SectionHead
             title="Feeling lucky?"
             note="Three random picks from your shelf."
@@ -201,7 +203,7 @@ export default function Home({ onOpen }: { onOpen: (t: MediaType, id: number, se
                   </span>
                 </button>
               ))}
-              <p className="rule-label pt-1">
+              <p className="rule-label mt-auto pt-4">
                 {stats.planned.length} on the shelf · {suggestions.length} shown
               </p>
             </div>

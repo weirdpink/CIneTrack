@@ -1,11 +1,11 @@
 import { useCallback, useSyncExternalStore } from 'react'
 
-export type ThemeId = 'paper' | 'halide' | 'nitrate' | 'blueprint'
+export type ThemeId = 'paper' | 'halide' | 'velvet' | 'blueprint'
 
 export const THEMES: { id: ThemeId; name: string; note: string; swatch: [string, string, string] }[] = [
   { id: 'paper', name: 'Paper', note: 'True white stock, oxblood ink', swatch: ['#ffffff', '#14130f', '#7a2318'] },
   { id: 'halide', name: 'Halide', note: 'Cold darkroom grey, silver-blue', swatch: ['#0f1417', '#e6edf1', '#6fa8c4'] },
-  { id: 'nitrate', name: 'Nitrate', note: 'Projection-booth black, amber lamp', swatch: ['#100f0d', '#f2ede1', '#c8843a'] },
+  { id: 'velvet', name: 'Velvet', note: 'Cinema velvet, curtain-red house', swatch: ['#100e0d', '#f2ede1', '#b3402e'] },
   { id: 'blueprint', name: 'Blueprint', note: 'Cool slate, technical ink', swatch: ['#eef1f4', '#131a21', '#1f5673'] },
 ]
 
@@ -41,7 +41,9 @@ function clamp(n: unknown, min: number, max: number, def: number): number {
 
 function sanitize(s: Partial<Settings> & Record<string, unknown>): Settings {
   const out: Settings = { ...DEFAULTS }
-  if (THEMES.some((t) => t.id === s.theme)) out.theme = s.theme as ThemeId
+  // Retired id: Nitrate became Velvet (amber lamp → curtain red).
+  const theme = (s.theme as string) === 'nitrate' ? 'velvet' : s.theme
+  if (THEMES.some((t) => t.id === theme)) out.theme = theme as ThemeId
   if (s.density === 'comfortable' || s.density === 'compact') out.density = s.density
   out.hideSpoilers = !!s.hideSpoilers
   out.autoCompleteSeries = s.autoCompleteSeries !== false

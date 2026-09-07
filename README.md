@@ -41,7 +41,7 @@ SQLite database that lives inside the project folder.
 - "Feeling lucky?" shuffle picks from your watchlist
 
 ### Personalisation
-- Four themes — **Paper**, **Halide**, **Nitrate**, **Blueprint**
+- Four themes — **Paper**, **Halide**, **Velvet**, **Blueprint**
 - Compact/comfortable density, adjustable grid columns, poster motion toggle,
   adult-content filter, auto-complete-series toggle
 - JSON import/export with validation, plus full-archive wipe

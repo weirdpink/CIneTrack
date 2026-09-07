@@ -54,19 +54,19 @@
   --tooth: rgba(230, 237, 241, 0.035);
 }
 
-/* Projection booth — film-stock black under an amber lamp. */
-[data-theme='nitrate'] {
-  --background: #100f0d;
+/* Velvet house — near-black auditorium, curtain-red ink, warm house-light. */
+[data-theme='velvet'] {
+  --background: #100e0d;
   --foreground: #f2ede1;
-  --card: #1a1815;
+  --card: #1c1412;
   --card-foreground: #f2ede1;
-  --primary: #c8843a;
-  --primary-foreground: #120f0a;
-  --secondary: #262320;
+  --primary: #b3402e;
+  --primary-foreground: #f2ede1;
+  --secondary: #271d1a;
   --secondary-foreground: #ded7c8;
-  --muted: #1e1c19;
+  --muted: #201917;
   --muted-foreground: #a49b88;
-  --accent: #d99a4e;
+  --accent: #d4695a;
   --accent-foreground: #120f0a;
   --destructive: #ef4444;
   --destructive-foreground: #fdfbf6;
@@ -76,8 +76,8 @@
   --status-watching-foreground: #ffffff;
   --status-watched: #15803d;
   --status-watched-foreground: #ffffff;
-  --border: #322e28;
-  --ring: #c8843a;
+  --border: #352825;
+  --ring: #b3402e;
   --tooth: rgba(242, 237, 225, 0.035);
 }
 

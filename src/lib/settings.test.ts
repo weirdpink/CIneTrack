@@ -12,7 +12,8 @@ describe('settings unknown-key passthrough', () => {
       JSON.stringify({ theme: 'nitrate', futureFlag: 123 }),
     )
     const mod = await import('./settings')
-    expect(mod.currentSettings().theme).toBe('nitrate')
+    // Retired Nitrate id migrates to Velvet.
+    expect(mod.currentSettings().theme).toBe('velvet')
 
     const { renderHook: rh } = await import('@testing-library/react')
     const { result } = rh(() => mod.useSettings())

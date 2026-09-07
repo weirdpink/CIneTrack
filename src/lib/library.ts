@@ -531,7 +531,7 @@ export function recentCompletions(entries: Entry[], limit = 8): Activity[] {
   const events: Activity[] = []
   for (const e of entries) {
     if (e.mediaType === 'movie') {
-      if (validStamp(e.watchedAt)) events.push({ entry: e, at: e.watchedAt, label: 'Feature' })
+      if (validStamp(e.watchedAt)) events.push({ entry: e, at: e.watchedAt, label: 'Movie' })
     } else if (e.status === 'watched') {
       const at = maxTime(Object.values(e.episodes ?? {})) ?? (validStamp(e.watchedAt) ? e.watchedAt : null)
       if (at != null) events.push({ entry: e, at, label: 'Series' })
@@ -547,7 +547,7 @@ export function recentActivity(entries: Entry[], limit = 12): Activity[] {
   const events: Activity[] = []
   for (const e of entries) {
     if (e.mediaType === 'movie' && validStamp(e.watchedAt)) {
-      events.push({ entry: e, at: e.watchedAt, label: 'Feature' })
+      events.push({ entry: e, at: e.watchedAt, label: 'Movie' })
     } else {
       for (const [k, at] of Object.entries(e.episodes ?? {})) {
         const parts = k.split('-')

@@ -115,7 +115,7 @@ describe('watchedCount', () => {
 })
 
 describe('recentActivity', () => {
-  it('correctly categorizes features, episodes, and rewatches', () => {
+  it('correctly categorizes movies, episodes, and rewatches', () => {
     const e1 = makeEntry({ id: 1, mediaType: 'movie', watchedAt: 1000 })
     const e2 = makeEntry({ id: 2, mediaType: 'tv', watchedAt: null, episodes: { '1-1': 1500, '1-2': 1600 } })
     const e3 = makeEntry({ id: 3, mediaType: 'movie', watchedAt: null, rewatches: [2500] })
@@ -123,7 +123,7 @@ describe('recentActivity', () => {
     const acts = recentActivity([e1, e2, e3], 10)
     const labels = acts.map((a) => a.label)
 
-    expect(labels).toContain('Feature')
+    expect(labels).toContain('Movie')
     expect(labels).toContain('S01E01')
     expect(labels).toContain('S01E02')
     expect(labels).toContain('Rewatch')
