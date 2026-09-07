@@ -101,6 +101,36 @@ function cinetrackSqlitePersistence(): Plugin {
 
   let cachedApiKey: string | null = null
   let cachedApiKeyMtime = 0
+  let cachedDotEnv: Record<string, string> | null = null
+
+  // Minimal .env reader (no new deps). Vite's own loadEnv only surfaces
+  // VITE_-prefixed vars, so a plain TMDB_KEY would never reach this config —
+  // read it ourselves. .env.local wins over .env.
+  function readDotEnvFile(): Record<string, string> {
+    if (cachedDotEnv) return cachedDotEnv
+    const out: Record<string, string> = {}
+    try {
+      for (const name of ['.env', '.env.local']) {
+        const p = path.resolve(import.meta.dirname, name)
+        if (!fs.existsSync(p)) continue
+        for (const line of fs.readFileSync(p, 'utf8').split('\n')) {
+          const t = line.trim()
+          if (!t || t.startsWith('#')) continue
+          const eq = t.indexOf('=')
+          if (eq <= 0) continue
+          let v = t.slice(eq + 1).trim()
+          if (v.length >= 2 && ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'")))) {
+            v = v.slice(1, -1)
+          }
+          if (v) out[t.slice(0, eq).trim()] = v
+        }
+      }
+    } catch {
+      /* missing/unreadable env file — fall through */
+    }
+    cachedDotEnv = out
+    return out
+  }
 
   function getTmdbApiKey(): string {
     // Cache and watch API.txt mtime to avoid per-request sync read
@@ -121,6 +151,11 @@ function cinetrackSqlitePersistence(): Plugin {
     const envKey = process.env.TMDB_KEY
     if (envKey) {
       cachedApiKey = envKey.trim()
+      return cachedApiKey
+    }
+    const fileEnvKey = readDotEnvFile().TMDB_KEY
+    if (fileEnvKey) {
+      cachedApiKey = fileEnvKey.trim()
       return cachedApiKey
     }
     if (process.env.VITE_TMDB_KEY) {
