@@ -1,0 +1,417 @@
+@import 'tailwindcss';
+
+:root {
+  --background: #ffffff;
+  --foreground: #14130f;
+  --card: #faf8f3;
+  --card-foreground: #14130f;
+  --primary: #7a2318;
+  --primary-foreground: #fdfbf6;
+  --secondary: #f0ede4;
+  --secondary-foreground: #3a3730;
+  --muted: #f5f3ed;
+  --muted-foreground: #74705f;
+  --accent: #7a2318;
+  --accent-foreground: #fdfbf6;
+  --destructive: #dc2626;
+  --destructive-foreground: #fdfbf6;
+  --status-planned: #52525b;
+  --status-planned-foreground: #ffffff;
+  --status-watching: #2563eb;
+  --status-watching-foreground: #ffffff;
+  --status-watched: #15803d;
+  --status-watched-foreground: #ffffff;
+  --border: #e3ded1;
+  --ring: #7a2318;
+  --radius: 2px;
+  --tooth: rgba(20, 19, 15, 0.045);
+}
+
+/* Darkroom under safelight — cold grey stock, silver-blue ink. */
+[data-theme='halide'] {
+  --background: #0f1417;
+  --foreground: #e6edf1;
+  --card: #161d21;
+  --card-foreground: #e6edf1;
+  --primary: #6fa8c4;
+  --primary-foreground: #0b1013;
+  --secondary: #222b30;
+  --secondary-foreground: #cbd6dc;
+  --muted: #1a2226;
+  --muted-foreground: #93a3ab;
+  --accent: #8fc4d9;
+  --accent-foreground: #0b1013;
+  --destructive: #ef4444;
+  --destructive-foreground: #0b1013;
+  --status-planned: #52525b;
+  --status-planned-foreground: #ffffff;
+  --status-watching: #2563eb;
+  --status-watching-foreground: #ffffff;
+  --status-watched: #15803d;
+  --status-watched-foreground: #ffffff;
+  --border: #2b363c;
+  --ring: #8fc4d9;
+  --tooth: rgba(230, 237, 241, 0.035);
+}
+
+/* Projection booth — film-stock black under an amber lamp. */
+[data-theme='nitrate'] {
+  --background: #100f0d;
+  --foreground: #f2ede1;
+  --card: #1a1815;
+  --card-foreground: #f2ede1;
+  --primary: #c8843a;
+  --primary-foreground: #120f0a;
+  --secondary: #262320;
+  --secondary-foreground: #ded7c8;
+  --muted: #1e1c19;
+  --muted-foreground: #a49b88;
+  --accent: #d99a4e;
+  --accent-foreground: #120f0a;
+  --destructive: #ef4444;
+  --destructive-foreground: #fdfbf6;
+  --status-planned: #52525b;
+  --status-planned-foreground: #ffffff;
+  --status-watching: #2563eb;
+  --status-watching-foreground: #ffffff;
+  --status-watched: #15803d;
+  --status-watched-foreground: #ffffff;
+  --border: #322e28;
+  --ring: #c8843a;
+  --tooth: rgba(242, 237, 225, 0.035);
+}
+
+/* Technical drawing — cool slate ground, ink blue rules. */
+[data-theme='blueprint'] {
+  --background: #eef1f4;
+  --foreground: #131a21;
+  --card: #e2e8ee;
+  --card-foreground: #131a21;
+  --primary: #1f5673;
+  --primary-foreground: #f2f6f9;
+  --secondary: #d7dfe7;
+  --secondary-foreground: #2c3945;
+  --muted: #e4e9ef;
+  --muted-foreground: #6b7885;
+  --accent: #2b7a9b;
+  --accent-foreground: #f2f6f9;
+  --destructive: #dc2626;
+  --destructive-foreground: #fdfbf6;
+  --status-planned: #52525b;
+  --status-planned-foreground: #ffffff;
+  --status-watching: #2563eb;
+  --status-watching-foreground: #ffffff;
+  --status-watched: #15803d;
+  --status-watched-foreground: #ffffff;
+  --border: #cbd5df;
+  --ring: #1f5673;
+  --tooth: rgba(19, 26, 33, 0.05);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-status-planned: var(--status-planned);
+  --color-status-planned-foreground: var(--status-planned-foreground);
+  --color-status-watching: var(--status-watching);
+  --color-status-watching-foreground: var(--status-watching-foreground);
+  --color-status-watched: var(--status-watched);
+  --color-status-watched-foreground: var(--status-watched-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --radius-sm: var(--radius);
+  --font-display: 'Instrument Serif', Georgia, serif;
+  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+html {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font-family: var(--font-sans);
+}
+
+html {
+  overflow-anchor: none;
+}
+body {
+  margin: 0;
+  overflow-anchor: none;
+  /* Faint paper tooth so the true-white ground reads as stock, not screen. */
+  background-image: radial-gradient(circle at 1px 1px, var(--tooth) 1px, transparent 0);
+  background-size: 4px 4px;
+}
+
+body {
+  transition: background-color 240ms ease, color 240ms ease;
+}
+
+::selection {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 0;
+}
+
+/* Scrollbars stay hidden until the surface is actively scrolling. */
+.quiet-scroll {
+  scrollbar-width: none;
+}
+.quiet-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.quiet-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+}
+.quiet-scroll:hover::-webkit-scrollbar-thumb,
+.quiet-scroll:active::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--foreground) 26%, transparent);
+}
+
+.rule-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+/* ------------------------------------------------------------------
+   Motion. Archival restraint: nothing bounces, nothing slides far.
+   Sheets settle, rules draw themselves, ink fades up. One easing
+   curve and two durations do almost all of the work.
+   ------------------------------------------------------------------ */
+
+:root {
+  --ease-sheet: cubic-bezier(0.22, 0.61, 0.28, 1);
+  --dur-quick: 200ms;
+  --dur-settle: 460ms;
+}
+
+@keyframes ct-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes ct-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Section rules draw left-to-right like a ruling pen. */
+@keyframes ct-rule {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+/* Plates uncover smoothly: gentle upward drift with photographic fade */
+@keyframes ct-plate {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ct-sweep {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes ct-tick {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Growing bars/meters: paint out from the left on first paint. */
+@keyframes ct-grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.animate-rise {
+  animation: ct-rise var(--dur-settle) var(--ease-sheet) both;
+}
+.animate-fade {
+  animation: ct-fade var(--dur-settle) var(--ease-sheet) both;
+}
+.animate-plate {
+  animation: ct-plate 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+}
+.animate-tick {
+  animation: ct-tick 380ms var(--ease-sheet) both;
+}
+.animate-rule {
+  transform-origin: left;
+  animation: ct-rule 620ms var(--ease-sheet) both;
+}
+.animate-grow {
+  transform-origin: left;
+  animation: ct-grow 700ms var(--ease-sheet) both;
+}
+
+/* Page-level entrance: the whole sheet settles, children follow in order. */
+.page-enter {
+  animation: ct-fade 260ms var(--ease-sheet) both;
+}
+.page-enter > * > * {
+  animation: ct-rise var(--dur-settle) var(--ease-sheet) both;
+}
+.page-enter > * > *:nth-child(1) {
+  animation-delay: 20ms;
+}
+.page-enter > * > *:nth-child(2) {
+  animation-delay: 70ms;
+}
+.page-enter > * > *:nth-child(3) {
+  animation-delay: 120ms;
+}
+.page-enter > * > *:nth-child(4) {
+  animation-delay: 170ms;
+}
+.page-enter > * > *:nth-child(5) {
+  animation-delay: 210ms;
+}
+.page-enter > * > *:nth-child(n + 6) {
+  animation-delay: 250ms;
+}
+
+/* Skeleton stand-ins while TMDb pages are in flight. */
+.shimmer {
+  background-image: linear-gradient(
+    90deg,
+    var(--muted) 0%,
+    var(--secondary) 50%,
+    var(--muted) 100%
+  );
+  background-size: 200% 100%;
+  animation: ct-sweep 1600ms ease-in-out infinite;
+}
+
+/* Underline that draws in on hover rather than snapping on. */
+.link-draw {
+  position: relative;
+}
+.link-draw::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform var(--dur-quick) var(--ease-sheet);
+}
+.link-draw:hover::after,
+.link-draw:focus-visible::after {
+  transform: scaleX(1);
+  transform-origin: left;
+}
+
+/* Presses register with a hair of give — no bounce. */
+.press {
+  transition: transform 120ms var(--ease-sheet), opacity 120ms var(--ease-sheet),
+    background-color var(--dur-quick) ease, border-color var(--dur-quick) ease,
+    color var(--dur-quick) ease;
+}
+.press:active {
+  transform: translateY(1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+  .shimmer {
+    animation: none;
+    background: var(--muted);
+  }
+}
+
+@media (min-width: 1024px) {
+  .poster-grid-dynamic {
+    grid-template-columns: repeat(var(--grid-desktop-cols, 6), minmax(0, 1fr)) !important;
+  }
+}
+
+/* Offscreen posters — content-visibility disabled for Discover to prevent scroll anchoring jumps on add */
+.poster-grid-dynamic > * {
+  /* content-visibility: auto; */
+  /* contain-intrinsic-size: 300px 450px; */
+}
+.poster-grid-dynamic {
+  overflow-anchor: none;
+}
+
+/* Row-based entrance stagger: unified, coherent rows without jagged horizontal tearing */
+.poster-grid-dynamic > *:nth-child(-n+7) {
+  animation-delay: 0ms;
+}
+.poster-grid-dynamic > *:nth-child(n+8):nth-child(-n+14) {
+  animation-delay: 45ms;
+}
+.poster-grid-dynamic > *:nth-child(n+15) {
+  animation-delay: 90ms;
+}

@@ -1,0 +1,23 @@
+node_modules/
+dist/
+build/
+.cache/
+.env*
+.vite/
+vite.config.*.timestamp-*
+*.tsbuildinfo
+*-debug.log*
+logs/
+*.log
+.claude-replay.*
+.tmp-*
+
+# Local secrets
+.env
+API.txt
+data/cinetrack.db
+data/*.db
+*.db
+coverage/
+.nyc_output/
+.DS_Store
