@@ -115,13 +115,14 @@ be wedged by a failing disk or network mirror.
 npm install
 ```
 
-Provide the key **either** as a `TMDB_KEY` environment variable **or** as the
-contents of an `API.txt` file in the project root (already gitignored — never
-commit it):
+Provide the key **either** as a `TMDB_KEY` environment variable **or** in a
+`.env` file in the project root (gitignored — never commit it):
 
 ```bash
-echo "your-key-here" > API.txt
+TMDB_KEY=your-key-here
 ```
+
+Restart the dev server after editing `.env`.
 
 ### Run
 
