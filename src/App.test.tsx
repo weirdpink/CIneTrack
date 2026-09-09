@@ -32,4 +32,17 @@ describe('nav keyboard shortcuts', () => {
     fireEvent.keyDown(window, { key: '3', code: 'Digit3' })
     expect(screen.queryByRole('heading', { name: 'Library' })).not.toBeInTheDocument()
   })
+
+  it('Alt+, opens settings and the gear tooltip lists shortcuts', async () => {
+    renderApp()
+    fireEvent.keyDown(window, { key: ',', code: 'Comma', altKey: true })
+    expect(await screen.findByRole('dialog', { name: 'Settings' })).toBeInTheDocument()
+
+    const gear = screen.getByRole('button', { name: 'Open settings' })
+    const tip = gear.getAttribute('title') ?? ''
+    expect(tip).toContain('1')
+    expect(tip).toContain('2')
+    expect(tip).toContain('3')
+    expect(tip).toContain(',')
+  })
 })

@@ -57,11 +57,16 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
 
-  // Alt+1/2/3 jumps between sections. Physical codes, not e.key: macOS
-  // Option+digit types ¡™£ instead of the digit.
+  // Alt+1/2/3 jumps between sections, Alt+, opens settings. Physical codes,
+  // not e.key: macOS Option+digit types ¡™£ instead of the digit.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!e.altKey || e.ctrlKey || e.metaKey) return
+      if (e.code === 'Comma') {
+        e.preventDefault()
+        setSettingsOpen(true)
+        return
+      }
       const digit = e.code.startsWith('Digit')
         ? e.code.slice(5)
         : e.code.startsWith('Numpad')
@@ -118,7 +123,7 @@ export default function App() {
             <button
               onClick={() => setSettingsOpen(true)}
               aria-label="Open settings"
-              title="Settings & themes"
+              title={`Keyboard shortcuts\n${navModifier()}1 Home · ${navModifier()}2 Discover · ${navModifier()}3 Library · ${navModifier()}, Settings`}
               className="press group flex h-8 w-8 items-center justify-center border border-border text-muted-foreground hover:border-[var(--foreground)] hover:bg-card hover:text-foreground"
             >
               <svg
