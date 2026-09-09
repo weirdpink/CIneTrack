@@ -13,11 +13,17 @@ const SettingsPanel = lazy(() => import('./components/SettingsPanel'))
 
 type Page = 'home' | 'discover' | 'library'
 
-const NAV: { id: Page; label: string }[] = [
-  { id: 'home', label: 'Home' },
-  { id: 'discover', label: 'Discover' },
-  { id: 'library', label: 'Library' },
+const NAV: { id: Page; label: string; key: string }[] = [
+  { id: 'home', label: 'Home', key: '1' },
+  { id: 'discover', label: 'Discover', key: '2' },
+  { id: 'library', label: 'Library', key: '3' },
 ]
+
+/** Shown modifier: ⌥ on Apple platforms, Alt everywhere else. */
+function navModifier(): string {
+  if (typeof navigator === 'undefined') return 'Alt'
+  return /Mac|iPhone|iPad|Macintosh/.test(navigator.userAgent ?? '') ? '⌥' : 'Alt'
+}
 
 export default function App() {
   const [page, setPage] = useState<Page>(() => {
@@ -29,6 +35,11 @@ export default function App() {
   const [open, setOpen] = useState<{ type: MediaType; id: number; seed?: TmdbTitle } | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const { entries } = useLibrary()
+
+  const goPage = useCallback((p: Page) => {
+    setInfo(null)
+    setPage(p)
+  }, [])
 
   useEffect(() => {
     const h = page === 'home' ? '' : `#${page}`
@@ -46,11 +57,26 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
 
+  // Alt+1/2/3 jumps between sections. Physical codes, not e.key: macOS
+  // Option+digit types ¡™£ instead of the digit.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.altKey || e.ctrlKey || e.metaKey) return
+      const digit = e.code.startsWith('Digit')
+        ? e.code.slice(5)
+        : e.code.startsWith('Numpad')
+          ? e.code.slice(6)
+          : null
+      const target = NAV.find((n) => n.key === digit)
+      if (!target) return
+      e.preventDefault()
+      goPage(target.id)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [goPage])
+
   const openTitle = useCallback((type: MediaType, id: number, seed?: TmdbTitle) => setOpen({ type, id, seed }), [])
-  const goPage = (p: Page) => {
-    setInfo(null)
-    setPage(p)
-  }
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -67,11 +93,16 @@ export default function App() {
                 key={n.id}
                 onClick={() => goPage(n.id)}
                 aria-current={page === n.id && !info ? 'page' : undefined}
-                className={`relative px-3 pb-2 pt-1.5 font-sans text-[11px] font-medium uppercase tracking-[0.14em] transition-colors duration-200 ${
+                title={`${n.label} (${navModifier()}${n.key})`}
+                className={`relative flex items-center gap-1.5 px-3 pb-2 pt-1.5 font-sans text-[11px] font-medium uppercase tracking-[0.14em] transition-colors duration-200 ${
                   page === n.id && !info ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {n.label}
+                <span aria-hidden className="font-mono text-[9px] tracking-[0.1em] text-muted-foreground/60">
+                  {navModifier()}
+                  {n.key}
+                </span>
                 <span
                   aria-hidden
                   className={`absolute inset-x-0 bottom-0 h-[2px] origin-left bg-[var(--primary)] transition-transform duration-300 ease-out ${
