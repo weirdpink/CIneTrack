@@ -42,34 +42,8 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
               >
                 Reload Page
               </button>
-              <button
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      'This permanently deletes your entire library. Export it from Settings first if you want a backup. Continue?',
-                    )
-                  ) {
-                    void (async () => {
-                      try {
-                        localStorage.removeItem('archive.library.v1')
-                        localStorage.removeItem('archive.settings.v1')
-                        localStorage.removeItem('archive.library.v1.corrupt')
-                        localStorage.removeItem('archive.settings.v1.corrupt')
-                        // Best-effort clear SQLite mirror (dev only)
-                        await fetch('/__data/library', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {})
-                        await fetch('/__data/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {})
-                      } finally {
-                        window.location.reload()
-                      }
-                    })()
-                  }
-                }}
-                className="press border border-border px-4 py-2 font-sans text-[11px] font-medium uppercase tracking-[0.14em] hover:bg-muted"
-              >
-                Reset Storage &amp; Reload
-              </button>
             </div>
-            <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">If this keeps happening, export your library from Settings before resetting and share the error ID with support.</p>
+            <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">If this keeps happening, export your library from Settings and share the error ID with support.</p>
           </div>
         </div>
       )

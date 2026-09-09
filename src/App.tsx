@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { type MediaType, type TmdbTitle } from './lib/tmdb'
 import { useLibrary } from './lib/library'
 import { Logo, Mark } from './components/Logo'
-import { Spinner } from './components/ui'
+import { Spinner, useTimedTooltip } from './components/ui'
 import InfoPage, { INFO_LINKS, type InfoSlug } from './components/InfoPages'
 
 const Home = lazy(() => import('./components/Home'))
@@ -82,6 +82,7 @@ export default function App() {
   }, [goPage])
 
   const openTitle = useCallback((type: MediaType, id: number, seed?: TmdbTitle) => setOpen({ type, id, seed }), [])
+  const gearTip = useTimedTooltip()
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -119,10 +120,18 @@ export default function App() {
           </nav>
 
           <div className="flex items-center justify-end gap-4">
-            <span className="rule-label hidden lg:inline">{entries.length} titles held</span>
-            <div className="relative group">
+            <div
+              className="relative"
+              onMouseEnter={gearTip.show}
+              onMouseLeave={gearTip.scheduleHide}
+              onFocus={gearTip.show}
+              onBlur={gearTip.scheduleHide}
+            >
               <button
-                onClick={() => setSettingsOpen((v) => !v)}
+                onClick={() => {
+                  gearTip.hide()
+                  setSettingsOpen((v) => !v)
+                }}
                 aria-label="Open settings"
                 className="press group flex h-8 w-8 items-center justify-center border border-border text-muted-foreground hover:border-[var(--foreground)] hover:bg-card hover:text-foreground"
               >
@@ -144,7 +153,9 @@ export default function App() {
             </button>
               <span
                 aria-hidden
-                className="pointer-events-none absolute right-0 top-full z-50 mt-2 whitespace-nowrap border border-border bg-foreground px-2 py-1 font-mono text-[10px] tracking-[0.08em] text-background opacity-0 shadow-xs transition-opacity duration-150 select-none group-hover:opacity-100 group-focus-within:opacity-100"
+                className={`pointer-events-none absolute right-0 top-full z-50 mt-2 whitespace-nowrap border border-border bg-foreground px-2 py-1 font-mono text-[10px] tracking-[0.08em] text-background shadow-xs transition-opacity duration-150 select-none ${
+                  gearTip.visible ? 'opacity-100' : 'opacity-0'
+                }`}
               >
                 {navModifier()},
               </span>

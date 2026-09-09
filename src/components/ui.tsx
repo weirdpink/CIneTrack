@@ -1,5 +1,6 @@
 import {
   memo,
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -579,6 +580,41 @@ export function useFocusTrap(ref: RefObject<HTMLElement | null>, active = true) 
       }
     }
   }, [ref, active])
+}
+
+/**
+ * Tooltips that show on hover/focus and hide shortly after the pointer
+ * leaves (or immediately on activation) — so they never get stuck open
+ * when a click moves focus elsewhere.
+ */
+export function useTimedTooltip(timeoutMs = 450) {
+  const [visible, setVisible] = useState(false)
+  const timer = useRef<number | null>(null)
+  useEffect(
+    () => () => {
+      if (timer.current) window.clearTimeout(timer.current)
+    },
+    [],
+  )
+  const clear = () => {
+    if (timer.current) {
+      window.clearTimeout(timer.current)
+      timer.current = null
+    }
+  }
+  const show = useCallback(() => {
+    clear()
+    setVisible(true)
+  }, [])
+  const scheduleHide = useCallback(() => {
+    clear()
+    timer.current = window.setTimeout(() => setVisible(false), timeoutMs)
+  }, [timeoutMs])
+  const hide = useCallback(() => {
+    clear()
+    setVisible(false)
+  }, [])
+  return { visible, show, scheduleHide, hide }
 }
 
 export function Spinner({ size = 32, className = '' }: { size?: number; className?: string }) {

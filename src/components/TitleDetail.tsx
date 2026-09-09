@@ -23,7 +23,7 @@ import {
 } from '../lib/library'
 import { useSettings } from '../lib/settings'
 import { useBodyScrollLock } from '../lib/bodyLock'
-import { CarouselNav, ConfirmDialog, Spinner, STATUS_BADGE, STATUS_INACTIVE, STATUS_STYLE, useFocusTrap } from './ui'
+import { CarouselNav, ConfirmDialog, Spinner, STATUS_BADGE, STATUS_INACTIVE, STATUS_STYLE, useFocusTrap, useTimedTooltip } from './ui'
 import { useToast } from './Toast'
 
 const STATUSES: Status[] = ['planned', 'watching', 'watched', 'dropped']
@@ -599,12 +599,22 @@ function IconButton({
 }) {
   const showTooltip = tooltip !== null
   const tip = tooltip ?? label
+  const hoverTip = useTimedTooltip()
 
   return (
-    <div className="relative group">
+    <div
+      className="relative"
+      onMouseEnter={hoverTip.show}
+      onMouseLeave={hoverTip.scheduleHide}
+      onFocus={hoverTip.show}
+      onBlur={hoverTip.scheduleHide}
+    >
       <button
         type="button"
-        onClick={onClick}
+        onClick={() => {
+          hoverTip.hide()
+          onClick()
+        }}
         aria-label={label}
         className={`press relative flex h-9 w-9 items-center justify-center border transition-colors ${
           tone === 'danger'
@@ -617,7 +627,7 @@ function IconButton({
         {children}
       </button>
       {showTooltip && (
-        <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap border border-border bg-foreground px-2 py-0.5 font-sans text-[10px] font-medium tracking-[0.04em] text-background opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 z-30 shadow-xs select-none">
+        <span className={`pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap border border-border bg-foreground px-2 py-0.5 font-sans text-[10px] font-medium tracking-[0.04em] text-background transition-opacity duration-150 z-30 shadow-xs select-none ${hoverTip.visible ? 'opacity-100' : 'opacity-0'}`}>
           {tip}
         </span>
       )}
@@ -925,14 +935,22 @@ function StatusButtons({
   const [modalOpen, setModalOpen] = useState(false)
   const badge = STATUS_BADGE[status] ?? STATUS_BADGE.planned
   const badgeStyle = STATUS_STYLE[status] ?? STATUS_STYLE.planned
+  const hintTip = useTimedTooltip()
 
   return (
     <>
-      <div className="relative group">
+      <div
+        className="relative"
+        onMouseEnter={hintTip.show}
+        onMouseLeave={hintTip.scheduleHide}
+        onFocus={hintTip.show}
+        onBlur={hintTip.scheduleHide}
+      >
         <button
           type="button"
           onClick={(e) => {
             ;(e.currentTarget as HTMLButtonElement).blur()
+            hintTip.hide()
             setModalOpen(true)
           }}
           aria-haspopup="dialog"
@@ -942,7 +960,7 @@ function StatusButtons({
         >
           <span>{badge?.label ?? status}</span>
         </button>
-        <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap border border-border bg-foreground px-2 py-0.5 font-sans text-[10px] font-medium tracking-[0.04em] text-background opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 z-30 shadow-xs select-none">
+        <span className={`pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap border border-border bg-foreground px-2 py-0.5 font-sans text-[10px] font-medium tracking-[0.04em] text-background transition-opacity duration-150 z-30 shadow-xs select-none ${hintTip.visible ? 'opacity-100' : 'opacity-0'}`}>
           Click to change status
         </span>
       </div>
