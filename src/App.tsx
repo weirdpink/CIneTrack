@@ -64,7 +64,7 @@ export default function App() {
       if (!e.altKey || e.ctrlKey || e.metaKey) return
       if (e.code === 'Comma') {
         e.preventDefault()
-        setSettingsOpen(true)
+        setSettingsOpen((v) => !v)
         return
       }
       const digit = e.code.startsWith('Digit')
@@ -120,12 +120,12 @@ export default function App() {
 
           <div className="flex items-center justify-end gap-4">
             <span className="rule-label hidden lg:inline">{entries.length} titles held</span>
-            <button
-              onClick={() => setSettingsOpen(true)}
-              aria-label="Open settings"
-              title={`Keyboard shortcuts\n${navModifier()}1 Home · ${navModifier()}2 Discover · ${navModifier()}3 Library · ${navModifier()}, Settings`}
-              className="press group flex h-8 w-8 items-center justify-center border border-border text-muted-foreground hover:border-[var(--foreground)] hover:bg-card hover:text-foreground"
-            >
+            <div className="relative group">
+              <button
+                onClick={() => setSettingsOpen((v) => !v)}
+                aria-label="Open settings"
+                className="press group flex h-8 w-8 items-center justify-center border border-border text-muted-foreground hover:border-[var(--foreground)] hover:bg-card hover:text-foreground"
+              >
               <svg
                 width="15"
                 height="15"
@@ -142,6 +142,13 @@ export default function App() {
                 <circle cx="12" cy="12" r="3" />
               </svg>
             </button>
+              <span
+                aria-hidden
+                className="pointer-events-none absolute right-0 top-full z-50 mt-2 whitespace-nowrap border border-border bg-foreground px-2 py-1 font-mono text-[10px] tracking-[0.08em] text-background opacity-0 shadow-xs transition-opacity duration-150 select-none group-hover:opacity-100 group-focus-within:opacity-100"
+              >
+                {navModifier()},
+              </span>
+            </div>
           </div>
         </div>
       </header>

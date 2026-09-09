@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import App from './App'
 import { ToastProvider } from './components/Toast'
 
@@ -33,16 +33,20 @@ describe('nav keyboard shortcuts', () => {
     expect(screen.queryByRole('heading', { name: 'Library' })).not.toBeInTheDocument()
   })
 
-  it('Alt+, opens settings and the gear tooltip lists shortcuts', async () => {
+  it('Alt+, toggles settings and the gear shows only its shortcut', async () => {
     renderApp()
     fireEvent.keyDown(window, { key: ',', code: 'Comma', altKey: true })
-    expect(await screen.findByRole('dialog', { name: 'Settings' })).toBeInTheDocument()
+    const dialog = await screen.findByRole('dialog', { name: 'Settings' })
+    expect(dialog).not.toHaveAttribute('inert')
+
+    fireEvent.keyDown(window, { key: ',', code: 'Comma', altKey: true })
+    await waitFor(() => {
+      expect(screen.getByRole('dialog', { name: 'Settings' })).toHaveAttribute('inert')
+    })
 
     const gear = screen.getByRole('button', { name: 'Open settings' })
-    const tip = gear.getAttribute('title') ?? ''
-    expect(tip).toContain('1')
-    expect(tip).toContain('2')
-    expect(tip).toContain('3')
-    expect(tip).toContain(',')
+    const hint = gear.parentElement?.textContent ?? ''
+    expect(hint).toContain(',')
+    expect(hint).not.toContain('1')
   })
 })
