@@ -19,13 +19,10 @@ export function Mark({ size = 28, className }: { size?: number; className?: stri
       role="img"
       aria-label="CineTrack"
       className={className}
-      // Isolate so the discs' multiply blend applies only to each other,
-      // not the page — otherwise it crushes to black on dark themes.
-      style={{ isolation: 'isolate' }}
     >
-      {/* multiply blend so the overlap deepens the way the source art does */}
+      {/* flat solids — no blending, the overlap stays a solid disc */}
       <circle cx="50" cy="50" r="50" fill={PINK} />
-      <circle cx="120" cy="50" r="50" fill={BLUE} style={{ mixBlendMode: 'multiply' }} />
+      <circle cx="120" cy="50" r="50" fill={BLUE} />
     </svg>
   )
 }
