@@ -86,11 +86,11 @@ export function StatusBadge({ status }: { status: Status }) {
   )
 }
 
-export function SectionHead({ index, title, note, right }: { index?: string; title: string; note?: string; right?: ReactNode }) {
+export function SectionHead({ index, title, note, right, rule = true }: { index?: string; title: string; note?: string; right?: ReactNode; rule?: boolean }) {
   return (
-    <div className="relative z-30 mb-6 flex items-end justify-between gap-6 pb-3">
+    <div className={`relative z-30 flex items-end justify-between gap-6 ${rule ? 'mb-6 pb-3' : 'mb-4'}`}>
       {/* The rule beneath the head draws itself in rather than appearing. */}
-      <span aria-hidden className="animate-rule absolute inset-x-0 bottom-0 h-px bg-border" />
+      {rule && <span aria-hidden className="animate-rule absolute inset-x-0 bottom-0 h-px bg-border" />}
       <div className="flex items-baseline gap-4 min-w-0">
         {index && <span className="animate-fade font-mono text-[11px] tracking-[0.2em] text-[var(--accent)]">{index}</span>}
         <div className="min-w-0">

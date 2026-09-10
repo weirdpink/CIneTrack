@@ -68,7 +68,7 @@ export default function Home({ onOpen }: { onOpen: (t: MediaType, id: number, se
       </section>
 
       <section>
-        <SectionHead title="Currently in progress" note="Series and movies left mid-viewing." />
+        <SectionHead title="Currently in progress" note="Series and movies left mid-viewing." rule={false} />
         {stats.inProgress.length === 0 ? (
           <Empty>Nothing underway — visit Discover to begin a title</Empty>
         ) : (
@@ -124,7 +124,7 @@ export default function Home({ onOpen }: { onOpen: (t: MediaType, id: number, se
 
       <section className="grid gap-12 lg:grid-cols-[1.4fr_1fr]">
         <div>
-          <SectionHead title="Recently watched" note="A running ledger of the last entries marked seen." />
+          <SectionHead title="Recently watched" note="A running ledger of the last entries marked seen." rule={false} />
           {activity.length === 0 ? (
             <Empty>No viewings recorded</Empty>
           ) : (
@@ -153,6 +153,7 @@ export default function Home({ onOpen }: { onOpen: (t: MediaType, id: number, se
           <SectionHead
             title="Feeling lucky?"
             note="Three random picks from your shelf."
+            rule={false}
             right={
               stats.planned.length > 3 ? (
                 <button
@@ -214,7 +215,7 @@ export default function Home({ onOpen }: { onOpen: (t: MediaType, id: number, se
       <Suspense
         fallback={
           <section aria-label="Monthly log loading">
-            <SectionHead title="Monthly log" note="Completed titles in each of the trailing twelve months." />
+            <SectionHead title="Monthly log" note="Completed titles in each of the trailing twelve months." rule={false} />
             <div className="w-full border border-border bg-card p-4 shimmer" style={{ height: 232 }} />
           </section>
         }

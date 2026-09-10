@@ -38,6 +38,7 @@ export default function MonthlyChart({ entries }: { entries: Entry[] }) {
       <SectionHead
         title="Monthly log"
         note="Completed titles in each of the trailing twelve months."
+        rule={false}
         right={
           busiest?.count ? (
             <span className="rule-label">
