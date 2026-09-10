@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { type MediaType, type TmdbTitle } from './lib/tmdb'
 import { useLibrary } from './lib/library'
 import { Logo, Mark } from './components/Logo'
@@ -83,6 +83,16 @@ export default function App() {
 
   const openTitle = useCallback((type: MediaType, id: number, seed?: TmdbTitle) => setOpen({ type, id, seed }), [])
   const gearTip = useTimedTooltip()
+  // Tracks hover so a focus event while the pointer is over the gear (e.g. the
+  // focus trap restoring the trigger on panel close) doesn't re-show the tip.
+  const gearHover = useRef(false)
+
+  // The tip must never survive the panel opening — opening via Alt+, while
+  // hovering leaves it visible otherwise.
+  const hideGearTip = gearTip.hide
+  useEffect(() => {
+    if (settingsOpen) hideGearTip()
+  }, [settingsOpen, hideGearTip])
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -119,15 +129,29 @@ export default function App() {
             ))}
           </nav>
 
-          <div className="flex items-center justify-end gap-4">
+          <div className="-mr-2 flex items-center justify-end gap-4">
             <div
               className="relative"
               onMouseEnter={() => {
+                gearHover.current = true
                 if (!settingsOpen) gearTip.show()
               }}
-              onMouseLeave={gearTip.scheduleHide}
-              onFocus={() => {
-                if (!settingsOpen) gearTip.show()
+              onMouseLeave={() => {
+                gearHover.current = false
+                gearTip.scheduleHide()
+              }}
+              onFocus={(e) => {
+                // Skip focus while hovering: the pointer already drives the tip,
+                // and the focus trap restoring the trigger on panel close would
+                // otherwise re-show it under a stationary cursor. Keyboard focus
+                // (no hover) still shows the shortcut hint.
+                if (settingsOpen || gearHover.current) return
+                try {
+                  if (e.target instanceof HTMLElement && !e.target.matches(':focus-visible')) return
+                } catch {
+                  /* older browsers fall through and show */
+                }
+                gearTip.show()
               }}
               onBlur={gearTip.scheduleHide}
             >

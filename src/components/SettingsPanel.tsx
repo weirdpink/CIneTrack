@@ -70,7 +70,9 @@ export default function SettingsPanel({ open, onClose }: { open: boolean; onClos
   }
 
   const episodes = entries.reduce((s, e) => s + watchedCount(e), 0)
-  const hours = Math.round(minutesWatched(entries) / 60)
+  const minutes = minutesWatched(entries)
+  const hours = Math.round(minutes / 60)
+  const days = (minutes / 1440).toFixed(1)
 
   return (
     <>
@@ -165,19 +167,7 @@ export default function SettingsPanel({ open, onClose }: { open: boolean; onClos
             />
           </Group>
 
-          <Group index="03" title="Catalogue integration" note="Upstream metadata credentials.">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <span className="block text-[13px]">TMDb API status</span>
-                <span className="rule-label mt-0.5 block">Built-in developer key active</span>
-              </div>
-              <span className="border border-border bg-card px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                Connected
-              </span>
-            </div>
-          </Group>
-
-          <Group index="04" title="Holdings & storage" note="Local archive state and persistence.">
+          <Group index="03" title="Holdings & storage" note="Local archive state and persistence.">
             <div className="space-y-2">
               <div className="rule-label text-[10px]">Collection Overview</div>
               <div className="grid grid-cols-3 gap-2 border border-border bg-card p-3">
@@ -200,6 +190,10 @@ export default function SettingsPanel({ open, onClose }: { open: boolean; onClos
                 <div>
                   <dt className="rule-label text-[9px]">Hours</dt>
                   <dd className="mt-1 font-display text-[26px] leading-none tabular-nums text-foreground">{hours}</dd>
+                </div>
+                <div>
+                  <dt className="rule-label text-[9px]">Days</dt>
+                  <dd className="mt-1 font-display text-[26px] leading-none tabular-nums text-foreground">{days}</dd>
                 </div>
               </div>
             </div>
