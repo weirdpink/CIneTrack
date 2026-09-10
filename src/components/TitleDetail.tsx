@@ -25,6 +25,7 @@ import { useSettings } from '../lib/settings'
 import { useBodyScrollLock } from '../lib/bodyLock'
 import { CarouselNav, ConfirmDialog, Spinner, STATUS_BADGE, STATUS_INACTIVE, STATUS_STYLE, useFocusTrap, useTimedTooltip } from './ui'
 import { useToast } from './Toast'
+import CastDetail from './CastDetail'
 
 const STATUSES: Status[] = ['planned', 'watching', 'watched', 'dropped']
 
@@ -33,11 +34,13 @@ export default function TitleDetail({
   id,
   seed,
   onClose: requestClose,
+  onOpenTitle,
 }: {
   type: MediaType
   id: number
   seed?: TmdbTitle
   onClose: () => void
+  onOpenTitle?: (t: MediaType, id: number) => void
 }) {
   const [data, setData] = useState<Detail | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -46,6 +49,7 @@ export default function TitleDetail({
   const [pendingStatus, setPendingStatus] = useState<Status | null>(null)
   const [confirmDeaccession, setConfirmDeaccession] = useState(false)
   const [tvView, setTvView] = useState<'seasons' | 'cast'>('seasons')
+  const [personId, setPersonId] = useState<number | null>(null)
   const [panelEl, setPanelEl] = useState<HTMLDivElement | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
   const closeTimer = useRef<number | null>(null)
@@ -440,7 +444,7 @@ export default function TitleDetail({
                     </div>
                   )
                 ) : (
-                  <CastCarousel cast={cast} trackRef={castTrackRef} />
+                  <CastCarousel cast={cast} trackRef={castTrackRef} onSelect={setPersonId} />
                 )}
               </Panel>
             ) : (
@@ -482,7 +486,7 @@ export default function TitleDetail({
                     </div>
                   )
                 ) : tvView === 'cast' ? (
-                  <CastCarousel cast={cast} trackRef={castTrackRef} />
+                  <CastCarousel cast={cast} trackRef={castTrackRef} onSelect={setPersonId} />
                 ) : data?.seasons ? (
                   <Seasons
                     key={id}
@@ -523,6 +527,14 @@ export default function TitleDetail({
             onAddRewatch={(at) => addRewatch(type, id, at)}
             onSetRewatchDate={(i, at) => setRewatchDate(type, id, i, at)}
             onRemoveRewatch={(i) => removeRewatch(type, id, i)}
+          />
+        )}
+
+        {personId != null && (
+          <CastDetail
+            personId={personId}
+            onClose={() => setPersonId(null)}
+            onOpenTitle={(t, i) => onOpenTitle?.(t, i)}
           />
         )}
 
@@ -723,9 +735,11 @@ function RewatchIcon() {
 function CastCarousel({
   cast,
   trackRef,
+  onSelect,
 }: {
   cast: { id: number; name: string; character: string; profile_path: string | null }[]
   trackRef?: React.RefObject<HTMLDivElement | null>
+  onSelect?: (personId: number) => void
 }) {
   const localTrack = useRef<HTMLDivElement>(null)
   const track = trackRef ?? localTrack
@@ -742,37 +756,44 @@ function CastCarousel({
     <div className="relative">
       <div ref={track} className="quiet-scroll -mx-1 flex snap-x gap-4 overflow-x-auto px-1 pb-2">
         {cast.map((c, i) => (
-          <figure
+          <div
             key={`${c.id}-${i}`}
             className="animate-plate w-[150px] shrink-0 snap-start"
             style={{ animationDelay: `${Math.min(i, 12) * 32}ms` }}
           >
-            <div className="aspect-[2/3] w-full overflow-hidden border border-border bg-muted">
-              {img(c.profile_path, 'w185') ? (
-                <img
-                  src={img(c.profile_path, 'w185')!}
-                  alt={c.name}
-                  loading="lazy"
-                  decoding="async"
-                  width={185}
-                  height={278}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center font-display text-[34px] text-muted-foreground">
-                  {c.name.slice(0, 1)}
-                </div>
-              )}
-            </div>
-            <figcaption className="mt-2">
-              <span className="block truncate font-display text-[16px] leading-tight">{c.name}</span>
-              {c.character && (
-                <span className="mt-0.5 block truncate text-[12px] leading-tight text-muted-foreground">
-                  {c.character}
-                </span>
-              )}
-            </figcaption>
-          </figure>
+            <button
+              type="button"
+              onClick={() => onSelect?.(c.id)}
+              aria-label={`Open ${c.name}`}
+              className="press block w-full text-left"
+            >
+              <span className="block aspect-[2/3] w-full overflow-hidden border border-border bg-muted transition-colors hover:border-[var(--foreground)]">
+                {img(c.profile_path, 'w185') ? (
+                  <img
+                    src={img(c.profile_path, 'w185')!}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    width={185}
+                    height={278}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="flex h-full items-center justify-center font-display text-[34px] text-muted-foreground">
+                    {c.name.slice(0, 1)}
+                  </span>
+                )}
+              </span>
+              <span className="mt-2 block">
+                <span className="block truncate font-display text-[16px] leading-tight">{c.name}</span>
+                {c.character && (
+                  <span className="mt-0.5 block truncate text-[12px] leading-tight text-muted-foreground">
+                    {c.character}
+                  </span>
+                )}
+              </span>
+            </button>
+          </div>
         ))}
       </div>
     </div>

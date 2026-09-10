@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { __clearTmdbCache, tmdb } from './tmdb'
+import { __clearTmdbCache, person, personCredits, tmdb } from './tmdb'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -45,5 +45,28 @@ describe('tmdb shared requests', () => {
     await expect(tmdb('/tv/99992', {}, { signal: dead.signal })).rejects.toThrow('Request cancelled')
     // Shared fetch still ran to completion and is now cached.
     await expect(tmdb('/tv/99992', {})).resolves.toEqual({ id: 99992 })
+  })
+})
+
+describe('person endpoints', () => {
+  it('fetches a person profile and combined credits', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((async (input: any) => {
+      const url = String(typeof input === 'string' ? input : (input?.url ?? input))
+      const body = url.includes('/combined_credits')
+        ? { cast: [{ id: 10, media_type: 'movie', title: 'Dune', popularity: 5 }] }
+        : { id: 123, name: 'Actor', biography: 'Bio.' }
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }) as typeof fetch)
+
+    await expect(person(123)).resolves.toMatchObject({ name: 'Actor' })
+    await expect(personCredits(123)).resolves.toMatchObject({ cast: [{ id: 10 }] })
+  })
+
+  it('rejects invalid person ids', async () => {
+    await expect(person(0)).rejects.toThrow('Invalid TMDb id')
+    await expect(personCredits(-5)).rejects.toThrow('Invalid TMDb id')
   })
 })

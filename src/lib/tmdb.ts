@@ -260,3 +260,38 @@ export const season = (id: number, seasonNumber: number, opts?: { signal?: Abort
   return tmdb<{ episodes: Episode[]; name: string; overview: string }>(`/tv/${id}/season/${seasonNumber}`, {}, opts)
 }
 export const genreList = (type: MediaType) => tmdb<{ genres: { id: number; name: string }[] }>(`/genre/${type}/list`).then((r) => r.genres)
+
+export type PersonDetail = {
+  id: number
+  name: string
+  biography: string
+  birthday: string | null
+  deathday: string | null
+  place_of_birth: string | null
+  profile_path: string | null
+  known_for_department: string | null
+  popularity: number
+}
+
+export type PersonCredit = {
+  id: number
+  media_type?: MediaType
+  title?: string
+  name?: string
+  poster_path: string | null
+  character?: string
+  release_date?: string
+  first_air_date?: string
+  vote_average?: number
+  popularity?: number
+}
+
+export const person = (id: number, opts?: { signal?: AbortSignal }) => {
+  if (!Number.isInteger(id) || id <= 0 || id > 1e9) return Promise.reject(new Error('Invalid TMDb id'))
+  return tmdb<PersonDetail>(`/person/${id}`, {}, opts)
+}
+
+export const personCredits = (id: number, opts?: { signal?: AbortSignal }) => {
+  if (!Number.isInteger(id) || id <= 0 || id > 1e9) return Promise.reject(new Error('Invalid TMDb id'))
+  return tmdb<{ cast: PersonCredit[] }>(`/person/${id}/combined_credits`, {}, opts)
+}

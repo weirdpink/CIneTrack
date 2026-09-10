@@ -25,6 +25,8 @@ SQLite database that lives inside the project folder.
 
 ### Catalogue entries (drawer)
 - Full TMDb synopsis, genres, runtime, IMDb link, and cast reel
+- **Cast pages:** tap any cast member for biography, birth facts, and a
+  clickable Known-for filmography that jumps between titles
 - **Series:** per-season episode tracking with stills, air dates, runtimes,
   season progress bars, bulk mark/unmark (unmarking a full season asks first),
   and spoiler-free mode

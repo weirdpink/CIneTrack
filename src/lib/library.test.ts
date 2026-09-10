@@ -145,6 +145,20 @@ describe('recentCompletions', () => {
     expect(acts[0].at).toBe(1700)
   })
 
+  it('prefers the recorded watch date over episode stamps', () => {
+    const e = makeEntry({
+      id: 2,
+      mediaType: 'tv',
+      status: 'watched',
+      watchedAt: 1000,
+      totalEpisodes: 3,
+      episodes: { '1-1': 1500, '1-2': 1600, '1-3': 1700 },
+    })
+    const acts = recentCompletions([e], 10)
+    expect(acts).toHaveLength(1)
+    expect(acts[0].at).toBe(1000)
+  })
+
   it('ignores in-progress episode logs', () => {
     const e = makeEntry({
       id: 2,

@@ -583,35 +583,19 @@ export function useFocusTrap(ref: RefObject<HTMLElement | null>, active = true) 
 }
 
 /**
- * Tooltips that show on hover/focus and hide shortly after the pointer
- * leaves (or immediately on activation) — so they never get stuck open
- * when a click moves focus elsewhere.
+ * Tooltips that show on hover/focus and vanish the moment the pointer
+ * leaves (the CSS fade keeps it smooth) or immediately on activation —
+ * so they never get stuck open when a click moves focus elsewhere.
  */
-export function useTimedTooltip(timeoutMs = 450) {
+export function useTimedTooltip() {
   const [visible, setVisible] = useState(false)
-  const timer = useRef<number | null>(null)
-  useEffect(
-    () => () => {
-      if (timer.current) window.clearTimeout(timer.current)
-    },
-    [],
-  )
-  const clear = () => {
-    if (timer.current) {
-      window.clearTimeout(timer.current)
-      timer.current = null
-    }
-  }
   const show = useCallback(() => {
-    clear()
     setVisible(true)
   }, [])
   const scheduleHide = useCallback(() => {
-    clear()
-    timer.current = window.setTimeout(() => setVisible(false), timeoutMs)
-  }, [timeoutMs])
+    setVisible(false)
+  }, [])
   const hide = useCallback(() => {
-    clear()
     setVisible(false)
   }, [])
   return { visible, show, scheduleHide, hide }

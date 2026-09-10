@@ -122,9 +122,13 @@ export default function App() {
           <div className="flex items-center justify-end gap-4">
             <div
               className="relative"
-              onMouseEnter={gearTip.show}
+              onMouseEnter={() => {
+                if (!settingsOpen) gearTip.show()
+              }}
               onMouseLeave={gearTip.scheduleHide}
-              onFocus={gearTip.show}
+              onFocus={() => {
+                if (!settingsOpen) gearTip.show()
+              }}
               onBlur={gearTip.scheduleHide}
             >
               <button
@@ -190,7 +194,7 @@ export default function App() {
 
       <Suspense fallback={null}>
         <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-        {open && <TitleDetail type={open.type} id={open.id} seed={open.seed} onClose={() => setOpen(null)} />}
+        {open && <TitleDetail type={open.type} id={open.id} seed={open.seed} onClose={() => setOpen(null)} onOpenTitle={openTitle} />}
       </Suspense>
     </div>
   )

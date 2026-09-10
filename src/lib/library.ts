@@ -533,7 +533,7 @@ export function recentCompletions(entries: Entry[], limit = 8): Activity[] {
     if (e.mediaType === 'movie') {
       if (validStamp(e.watchedAt)) events.push({ entry: e, at: e.watchedAt, label: 'Movie' })
     } else if (e.status === 'watched') {
-      const at = maxTime(Object.values(e.episodes ?? {})) ?? (validStamp(e.watchedAt) ? e.watchedAt : null)
+      const at = validStamp(e.watchedAt) ? e.watchedAt : maxTime(Object.values(e.episodes ?? {}))
       if (at != null) events.push({ entry: e, at, label: 'Series' })
     }
     for (const at of e.rewatches ?? []) {
@@ -580,7 +580,7 @@ export function activityByMonth(entries: Entry[], months = 12) {
     if (e.mediaType === 'movie') {
       if (e.watchedAt) bump(e.watchedAt)
     } else if (e.status === 'watched') {
-      const at = maxTime(Object.values(e.episodes ?? {})) ?? (validStamp(e.watchedAt) ? e.watchedAt : null)
+      const at = validStamp(e.watchedAt) ? e.watchedAt : maxTime(Object.values(e.episodes ?? {}))
       if (at != null) bump(at)
     }
     for (const at of e.rewatches ?? []) bump(at)

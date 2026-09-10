@@ -87,7 +87,7 @@ function cinetrackSqlitePersistence(): Plugin {
   const MAX_BODY_BYTES_SETTINGS = 256 * 1024
   const CACHE_TTL_MS = 1000 * 60 * 60 * 24
   const MAX_CACHE_ENTRIES = 200
-  const ALLOWED_TMDB_PREFIXES = ['/search/', '/discover/', '/trending/', '/movie/', '/tv/', '/genre/']
+  const ALLOWED_TMDB_PREFIXES = ['/search/', '/discover/', '/trending/', '/movie/', '/tv/', '/genre/', '/person/']
   const ALLOWED_TMDB_QUERY_KEYS = new Set([
     'language',
     'query',
