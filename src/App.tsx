@@ -89,7 +89,7 @@ export default function App() {
       <header className="sticky top-0 z-40 border-b border-border bg-background/92 backdrop-blur">
         {/* Three tracks so the nav sits optically centred regardless of side widths. */}
         <div className="grid w-full grid-cols-2 items-center gap-3 px-6 py-3 md:grid-cols-[1fr_auto_1fr] md:gap-4 lg:px-10 xl:px-12">
-          <button onClick={() => goPage('home')} aria-label="Go to home" className="press flex items-center justify-self-start">
+          <button onClick={() => setInfo('about')} aria-label="About CineTrack" className="press flex items-center justify-self-start">
             <Logo size={24} markSize={44} wordmark={false} />
           </button>
 
