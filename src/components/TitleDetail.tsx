@@ -187,7 +187,6 @@ export default function TitleDetail({
   const metaParts: { text: string; isImdb?: boolean }[] = source
     ? [
         { text: releaseLabel ?? entry?.year ?? yearOf(source) ?? '—' },
-        ...(data?.genres?.length ? [{ text: data.genres.map((g) => g.name).join(' / ') }] : []),
         ...(type === 'movie'
           ? (formattedRuntime ? [{ text: formattedRuntime }] : [])
           : [{ text: `${entry?.totalEpisodes ?? data?.number_of_seasons ?? '—'} ${entry?.totalEpisodes ? 'EPISODES' : 'SEASONS'}` }]),
@@ -273,7 +272,7 @@ export default function TitleDetail({
 
               <div className="animate-rise flex min-h-[285px] flex-col [animation-delay:80ms]">
                 <h1 className="font-display text-[42px] leading-[1.05] tracking-tight">{entry?.title || titleOf(source)}</h1>
-                <p className="mt-2 font-mono text-[11px] tracking-[0.14em] text-muted-foreground">
+                <p className="mt-2 truncate font-mono text-[11px] tracking-[0.14em] text-muted-foreground">
                   {metaParts.map((part, idx) => (
                     <span key={idx}>
                       {idx > 0 && <span className="mx-2 text-border">·</span>}
@@ -282,7 +281,7 @@ export default function TitleDetail({
                           href={imdbUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="transition-colors hover:text-[var(--primary)]"
+                          className="font-medium text-[var(--primary)] underline decoration-[var(--primary)]/40 underline-offset-[3px] transition-opacity hover:opacity-75"
                           title="View on IMDb"
                         >
                           {part.text}
