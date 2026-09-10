@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { type MediaType, type TmdbTitle } from './lib/tmdb'
 import { useLibrary } from './lib/library'
-import { Logo, Mark } from './components/Logo'
+import { Logo } from './components/Logo'
 import { Spinner, useTimedTooltip } from './components/ui'
 import InfoPage, { INFO_LINKS, type InfoSlug } from './components/InfoPages'
 
@@ -99,7 +99,7 @@ export default function App() {
       <header className="sticky top-0 z-40 border-b border-border bg-background/92 backdrop-blur">
         {/* Three tracks so the nav sits optically centred regardless of side widths. */}
         <div className="grid w-full grid-cols-2 items-center gap-3 px-6 py-3 md:grid-cols-[1fr_auto_1fr] md:gap-4 lg:px-10 xl:px-12">
-          <button onClick={() => setInfo('about')} aria-label="About CineTrack" className="press flex items-center justify-self-start">
+          <button onClick={() => goPage('home')} aria-label="CineTrack home" className="press flex items-center justify-self-start">
             <Logo size={24} markSize={44} wordmark={false} />
           </button>
 
@@ -237,7 +237,7 @@ function Footer({
     <footer className="border-t border-border bg-card">
       <div className="grid w-full gap-10 px-6 py-12 lg:grid-cols-[1.4fr_1fr_1fr] lg:px-10 xl:px-12">
         <div>
-          <Mark size={34} />
+          <Logo size={24} />
           <p className="mt-4 max-w-[36ch] text-[13px] leading-relaxed text-muted-foreground">
             A personal moving-image archive for the films and series you watch — catalogued, tracked, and stored in
             your local SQLite database.
