@@ -46,7 +46,6 @@ export type Settings = {
   defaultShelfTab: (typeof TAB_IDS)[number]
   defaultSort: (typeof SORT_IDS)[number]
   showCommunityScores: boolean
-  chartStyle: 'area'
   dateStyle: 'absolute' | 'relative'
   posterQuality: 'standard' | 'saver'
   metadataLanguage: string
@@ -69,7 +68,6 @@ const DEFAULTS: Settings = {
   defaultShelfTab: 'all',
   defaultSort: 'added',
   showCommunityScores: false,
-  chartStyle: 'area',
   dateStyle: 'absolute',
   posterQuality: 'standard',
   metadataLanguage: 'en-US',
@@ -108,8 +106,6 @@ function sanitize(s: Partial<Settings> & Record<string, unknown>): Settings {
   if ((SORT_IDS as readonly string[]).includes(s.defaultSort as string)) {
     out.defaultSort = s.defaultSort as Settings['defaultSort']
   }
-  // Chart style is fixed to area
-  out.chartStyle = 'area'
   if (s.dateStyle === 'absolute' || s.dateStyle === 'relative') out.dateStyle = s.dateStyle
   if (s.posterQuality === 'standard' || s.posterQuality === 'saver') out.posterQuality = s.posterQuality
   if (typeof s.metadataLanguage === 'string' && LANGUAGES.some((l) => l.id === s.metadataLanguage)) {
@@ -127,10 +123,11 @@ function sanitize(s: Partial<Settings> & Record<string, unknown>): Settings {
  */
 let extraKeys: Record<string, unknown> = {}
 const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+const RETIRED_KEYS = new Set(['chartStyle'])
 function stashExtras(s: Record<string, unknown>, opts?: { merge?: boolean }) {
   if (!opts?.merge) extraKeys = {}
   for (const [k, v] of Object.entries(s)) {
-    if (k in DEFAULTS || UNSAFE_KEYS.has(k)) continue
+    if (k in DEFAULTS || UNSAFE_KEYS.has(k) || RETIRED_KEYS.has(k)) continue
     extraKeys[k] = v
   }
 }
@@ -194,6 +191,8 @@ try {
 } catch {}
 
 const SETTINGS_ENDPOINT = '/__data/settings'
+let pendingSettingsBody: string | null = null
+let settingsMirrorRunning = false
 
 function mirrorToSqlite(s: Settings) {
   if (typeof fetch !== 'function') return
@@ -201,14 +200,34 @@ function mirrorToSqlite(s: Settings) {
     hasMutatedDuringHydration = true
     return
   }
-  const body = JSON.stringify(withExtras(s))
-  const isUnloading = typeof document !== 'undefined' && document.visibilityState === 'hidden'
-  void fetch(SETTINGS_ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body,
-    keepalive: isUnloading,
-  }).catch(() => {})
+  pendingSettingsBody = JSON.stringify(withExtras(s))
+  if (settingsMirrorRunning) return
+  settingsMirrorRunning = true
+  void (async () => {
+    while (pendingSettingsBody !== null) {
+      const body = pendingSettingsBody
+      pendingSettingsBody = null
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 8000)
+      try {
+        const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden'
+        const keepalive = hidden && new TextEncoder().encode(body).byteLength <= 64 * 1024
+        const res = await fetch(SETTINGS_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body,
+          keepalive,
+          signal: controller.signal,
+        })
+        if (!res.ok) console.warn(`[settings] SQLite mirror rejected snapshot (${res.status})`)
+      } catch (e) {
+        console.warn('[settings] SQLite mirror unavailable', e)
+      } finally {
+        clearTimeout(timeout)
+      }
+    }
+    settingsMirrorRunning = false
+  })()
 }
 
 async function hydrateFromSqlite() {
@@ -315,7 +334,6 @@ export function useSettings() {
       localStorage.setItem(STORAGE, JSON.stringify(withExtras(cache)))
     } catch (e) {
       console.error('[settings] quota', e)
-      return
     }
     if (key === 'theme')
       try {

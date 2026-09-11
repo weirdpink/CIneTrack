@@ -14,6 +14,81 @@ import { progress, useLibrary, type Entry, type Status } from '../lib/library'
 import { useSettings } from '../lib/settings'
 import { useToast } from './Toast'
 
+/** CineTrack brand marks. */
+const PINK = '#D93D87'
+const BLUE = '#263C92'
+
+export function Mark({ size = 28, className }: { size?: number; className?: string }) {
+  const height = (size * 100) / 170
+  return (
+    <svg
+      width={size}
+      height={height}
+      viewBox="0 0 170 100"
+      fill="none"
+      role="img"
+      aria-label="CineTrack"
+      className={className}
+    >
+      <circle cx="50" cy="50" r="50" fill={PINK} />
+      <circle cx="120" cy="50" r="50" fill={BLUE} />
+    </svg>
+  )
+}
+
+export function Logo({
+  size = 26,
+  markSize,
+  className,
+  wordmark = true,
+}: {
+  size?: number
+  markSize?: number
+  className?: string
+  wordmark?: boolean
+}) {
+  return (
+    <span className={`inline-flex items-center gap-2.5 ${className ?? ''}`}>
+      <Mark size={markSize ?? size} />
+      {wordmark && (
+        <span
+          className="font-display italic leading-none tracking-tight text-foreground"
+          style={{ fontSize: size * 1.02 }}
+        >
+          CineTrack
+        </span>
+      )}
+    </span>
+  )
+}
+
+let scrollLockCount = 0
+let previousOverflow: string | null = null
+let previousPaddingRight: string | null = null
+
+export function useBodyScrollLock(locked: boolean) {
+  useEffect(() => {
+    if (!locked || typeof document === 'undefined') return
+    if (scrollLockCount === 0) {
+      previousOverflow = document.body.style.overflow
+      previousPaddingRight = document.body.style.paddingRight
+      const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth
+      document.body.style.overflow = 'hidden'
+      if (scrollbarWidth > 0) document.body.style.paddingRight = `${scrollbarWidth}px`
+    }
+    scrollLockCount++
+    return () => {
+      scrollLockCount = Math.max(0, scrollLockCount - 1)
+      if (scrollLockCount === 0 && typeof document !== 'undefined') {
+        document.body.style.overflow = previousOverflow ?? ''
+        document.body.style.paddingRight = previousPaddingRight ?? ''
+        previousOverflow = null
+        previousPaddingRight = null
+      }
+    }
+  }, [locked])
+}
+
 /** Fixed semantic status colors — distinct tokens like delete red, via CSS vars. */
 export const STATUS_STYLE: Record<Status, string> = {
   planned: 'bg-[var(--status-planned)] text-[var(--status-planned-foreground)] border border-[var(--status-planned)]',
@@ -77,6 +152,7 @@ export function StatusBadge({ status }: { status: Status }) {
   const s = STATUS_BADGE[status] ?? STATUS_BADGE.planned
   return (
     <span
+      role="img"
       title={s.label}
       aria-label={s.label}
       className={`flex h-6 w-6 items-center justify-center ${s.bg}`}
@@ -158,17 +234,21 @@ export function Chip({
   children,
   onClick,
   className,
+  role,
 }: {
   active?: boolean
   children: ReactNode
   onClick?: () => void
   className?: string
+  role?: 'radio'
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-pressed={active ? 'true' : 'false'}
+      role={role}
+      aria-pressed={role ? undefined : active ? 'true' : 'false'}
+      aria-checked={role === 'radio' ? active : undefined}
       className={`press shrink-0 whitespace-nowrap border px-3 py-1.5 font-sans text-[11px] font-medium uppercase tracking-[0.14em] ${
         active
           ? 'border-[var(--primary)] bg-[var(--primary)] text-primary-foreground'
@@ -252,7 +332,9 @@ export const Poster = memo(function Poster({
   style?: CSSProperties
 }) {
   const { settings } = useSettings()
-  const { upsert } = useLibrary()
+  // Posters receive their entry from the shelf parent. Avoid subscribing each
+  // individual card to the whole store; one shelf-level subscription is enough.
+  const { upsert } = useLibrary(false)
   const { toast } = useToast()
   const type: MediaType = (item.media_type ?? (item.title ? 'movie' : 'tv')) as MediaType
   const saver = settings.posterQuality === 'saver'
@@ -266,9 +348,12 @@ export const Poster = memo(function Poster({
     settings.showCommunityScores && item.vote_average > 0 ? item.vote_average.toFixed(1) : null
 
   const [imgLoaded, setImgLoaded] = useState(false)
+  const [imgError, setImgError] = useState(false)
   const imgRef = useRef<HTMLImageElement>(null)
 
   useEffect(() => {
+    setImgLoaded(false)
+    setImgError(false)
     if (imgRef.current?.complete && imgRef.current.naturalWidth > 0) {
       setImgLoaded(true)
     }
@@ -277,7 +362,7 @@ export const Poster = memo(function Poster({
   return (
     <div style={style} className="group animate-plate select-none">
       <div className="relative aspect-[2/3] w-full overflow-hidden border border-border bg-muted transition-colors duration-300 group-hover:border-[var(--foreground)]">
-        {src && !imgLoaded && (
+        {src && !imgLoaded && !imgError && (
           <div className="absolute inset-0 shimmer opacity-70" aria-hidden="true" />
         )}
         <button
@@ -286,7 +371,7 @@ export const Poster = memo(function Poster({
           aria-label={`Open ${titleOf(item)}`}
           className="absolute inset-0 h-full w-full cursor-pointer press"
         >
-          {src ? (
+          {src && !imgError ? (
             <img
               ref={imgRef}
               src={src}
@@ -298,6 +383,10 @@ export const Poster = memo(function Poster({
               width={342}
               height={513}
               onLoad={() => setImgLoaded(true)}
+              onError={() => {
+                setImgError(true)
+                setImgLoaded(false)
+              }}
               className={`h-full w-full object-cover transition-all duration-500 ease-out ${
                 imgLoaded ? 'opacity-100' : 'opacity-0'
               } ${
@@ -747,4 +836,3 @@ export function ConfirmDialog({
 
   return createPortal(content, container ?? document.body)
 }
-

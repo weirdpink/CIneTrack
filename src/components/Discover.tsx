@@ -275,12 +275,16 @@ export default function Discover({ onOpen }: { onOpen: (t: MediaType, id: number
   // Load genres for movie/tv modes — use live flag to avoid stale set
   useEffect(() => {
     if (mode !== 'movie' && mode !== 'tv') return
+    const controller = new AbortController()
     let live = true
-    genreList(type)
+    genreList(type, { signal: controller.signal })
       .then((g) => { if (live) setGenres(g) })
       .catch(() => { if (live) setGenres([]) })
     setGenre(null)
-    return () => { live = false }
+    return () => {
+      live = false
+      controller.abort()
+    }
   }, [mode, type, settings.metadataLanguage])
 
   const shelfToken = useRef(0)
@@ -289,6 +293,7 @@ export default function Discover({ onOpen }: { onOpen: (t: MediaType, id: number
   // Seeds drive the personal rows; genre rows deliberately reach beyond the library.
   useEffect(() => {
     if (gridActive) return
+    const controller = new AbortController()
     let live = true
     const token = ++shelfToken.current
     setShelvesLoading(true)
@@ -301,17 +306,17 @@ export default function Discover({ onOpen }: { onOpen: (t: MediaType, id: number
         const [seedPages, trendItems, movieGenres] = await Promise.all([
           Promise.all(
             topSeeds.map((s) =>
-              recommendations(s.mediaType, s.id, 1).then(
+              recommendations(s.mediaType, s.id, 1, { signal: controller.signal }).then(
                 (r) => ({ seed: s, items: r.results.map((x) => ({ ...x, media_type: x.media_type ?? s.mediaType })) }),
                 () => ({ seed: s, items: [] as TmdbTitle[] }),
               ),
             ),
           ),
-          trending('all', 'week', 1).then(
+          trending('all', 'week', 1, { signal: controller.signal }).then(
             (r) => r.results,
             () => [] as TmdbTitle[],
           ),
-          genreList('movie').then(
+          genreList('movie', { signal: controller.signal }).then(
             (g) => g,
             () => [] as { id: number; name: string }[],
           ),
@@ -330,7 +335,7 @@ export default function Discover({ onOpen }: { onOpen: (t: MediaType, id: number
               sort_by: genreSorts[i % genreSorts.length].id,
               with_genres: String(g.id),
               'vote_count.gte': genreSorts[i % genreSorts.length].gte,
-            }).then(
+            }, { signal: controller.signal }).then(
               (r) => ({ genre: g, sortLabel: genreSorts[i % genreSorts.length].label, items: r.results.map((x) => ({ ...x, media_type: 'movie' as MediaType })) }),
               () => ({ genre: g, sortLabel: '', items: [] as TmdbTitle[] }),
             ),
@@ -385,20 +390,23 @@ export default function Discover({ onOpen }: { onOpen: (t: MediaType, id: number
         if (live && token === shelfToken.current) setShelvesLoading(false)
       }
     })()
-    return () => { live = false }
+    return () => {
+      live = false
+      controller.abort()
+    }
   }, [gridActive, seedSig, settings.includeAdult, settings.metadataLanguage, shelfRetry])
 
   /** One page of whichever feed is active. Suggestions walk the seed list. */
   const fetchPage = useCallback(
-    (p: number): Promise<Page> => {
-      if (searching) return searchMulti(debounced, p)
-      if (mode === 'trending') return trending('all', 'week', p)
+    (p: number, signal?: AbortSignal): Promise<Page> => {
+      if (searching) return searchMulti(debounced, p, { signal })
+      if (mode === 'trending') return trending('all', 'week', p, { signal })
       if (mode === 'suggested') {
         const currentSeeds = seedsRef.current
-        if (currentSeeds.length === 0) return trending('all', 'week', p)
+        if (currentSeeds.length === 0) return trending('all', 'week', p, { signal })
         const seed = currentSeeds[(p - 1) % currentSeeds.length]
         const innerPage = Math.floor((p - 1) / currentSeeds.length) + 1
-        return recommendations(seed.mediaType, seed.id, innerPage).then((r) => ({
+        return recommendations(seed.mediaType, seed.id, innerPage, { signal }).then((r) => ({
           ...r,
           results: r.results.map((x) => ({ ...x, media_type: x.media_type ?? seed.mediaType })),
           total_pages: r.total_pages,
@@ -408,18 +416,22 @@ export default function Discover({ onOpen }: { onOpen: (t: MediaType, id: number
         page: p,
         sort_by: mode === 'tv' && sort === 'primary_release_date.desc' ? 'first_air_date.desc' : sort,
         ...(genre ? { with_genres: String(genre) } : {}),
-      }).then((r) => ({ ...r, results: r.results.map((x) => ({ ...x, media_type: type })) }))
+      }, { signal }).then((r) => ({ ...r, results: r.results.map((x) => ({ ...x, media_type: type })) }))
     },
     [searching, debounced, mode, type, sort, genre, settings.includeAdult, settings.metadataLanguage],
   )
 
   const feedToken = useRef(0)
+  const feedControllerRef = useRef<AbortController | null>(null)
 
   // Reset and load page one when feed identity changes (mode/search/sort/genre/includeAdult)
   // Note: seedsRef is intentionally NOT a dep — adding a library item shouldn't wipe the grid
   // Shelved For You has its own fetch path — the grid stays idle there
   useEffect(() => {
     if (!gridActive) return
+    feedControllerRef.current?.abort()
+    const controller = new AbortController()
+    feedControllerRef.current = controller
     let live = true
     const token = ++feedToken.current
     setLoading(true)
@@ -427,15 +439,26 @@ export default function Discover({ onOpen }: { onOpen: (t: MediaType, id: number
     setResults([])
     setPage(1)
     setTotalPages(1)
-    fetchPage(1)
+    loadingRef.current = true
+    fetchPage(1, controller.signal)
       .then((r) => {
         if (!live || token !== feedToken.current) return
         setResults(r.results)
         setTotalPages(r.total_pages ?? 1)
       })
-      .catch((e) => { if (live && token === feedToken.current) setError(e.message) })
-      .finally(() => { if (live && token === feedToken.current) setLoading(false) })
-    return () => { live = false }
+      .catch((e) => {
+        if (live && token === feedToken.current && e instanceof Error && e.message !== 'Request cancelled') setError(e.message)
+      })
+      .finally(() => {
+        if (live && token === feedToken.current) {
+          setLoading(false)
+          loadingRef.current = false
+        }
+      })
+    return () => {
+      live = false
+      controller.abort()
+    }
   }, [fetchPage, gridActive])
 
   // Also reset when includeAdult toggles — fetchPage already depends on it, so above effect handles it
@@ -450,7 +473,7 @@ export default function Discover({ onOpen }: { onOpen: (t: MediaType, id: number
     setLoading(true)
     const next = page + 1
     const token = feedToken.current
-    fetchPage(next)
+      fetchPage(next, feedControllerRef.current?.signal)
       .then((r) => {
         if (token !== feedToken.current) return
         setPage(next)
@@ -463,7 +486,9 @@ export default function Discover({ onOpen }: { onOpen: (t: MediaType, id: number
           return nextResults.length > 300 ? nextResults.slice(0, 300) : nextResults
         })
       })
-      .catch((e) => { if (token === feedToken.current) setError(e.message) })
+      .catch((e) => {
+        if (token === feedToken.current && e instanceof Error && e.message !== 'Request cancelled') setError(e.message)
+      })
       .finally(() => {
         if (token === feedToken.current) {
           setLoading(false)
@@ -583,14 +608,23 @@ export default function Discover({ onOpen }: { onOpen: (t: MediaType, id: number
                   setError(null)
                   setLoading(true)
                   const token = feedToken.current
-                  fetchPage(1)
+                  const controller = new AbortController()
+                  feedControllerRef.current?.abort()
+                  feedControllerRef.current = controller
+                  loadingRef.current = true
+                  fetchPage(1, controller.signal)
                     .then((r) => {
                       if (token !== feedToken.current) return
                       setResults(r.results)
                       setTotalPages(r.total_pages ?? 1)
                     })
-                    .catch((e) => setError(e.message))
-                    .finally(() => setLoading(false))
+                    .catch((e) => {
+                      if (e instanceof Error && e.message !== 'Request cancelled') setError(e.message)
+                    })
+                    .finally(() => {
+                      setLoading(false)
+                      loadingRef.current = false
+                    })
                 }}
                 className="press shrink-0 border border-[var(--primary)] bg-[var(--primary)] px-3 py-1 font-sans text-[11px] font-medium uppercase tracking-[0.12em] text-primary-foreground hover:opacity-90"
               >

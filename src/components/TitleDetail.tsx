@@ -22,8 +22,7 @@ import {
   type Status,
 } from '../lib/library'
 import { useSettings } from '../lib/settings'
-import { useBodyScrollLock } from '../lib/bodyLock'
-import { CarouselNav, ConfirmDialog, Spinner, STATUS_BADGE, STATUS_INACTIVE, STATUS_STYLE, useFocusTrap, useTimedTooltip } from './ui'
+import { CarouselNav, ConfirmDialog, Spinner, STATUS_BADGE, STATUS_INACTIVE, STATUS_STYLE, useBodyScrollLock, useFocusTrap, useTimedTooltip } from './ui'
 import { useToast } from './Toast'
 import CastDetail from './CastDetail'
 
@@ -56,7 +55,8 @@ export default function TitleDetail({
   const { toast } = useToast()
   useBodyScrollLock(true)
   useFocusTrap(panelRef)
-  const metadataLanguage = useSettings().settings.metadataLanguage
+  const { settings } = useSettings()
+  const metadataLanguage = settings.metadataLanguage
   const castTrackRef = useRef<HTMLDivElement>(null)
   const {
     get,
@@ -190,7 +190,7 @@ export default function TitleDetail({
         { text: releaseLabel ?? entry?.year ?? yearOf(source) ?? '—' },
         ...(type === 'movie'
           ? (formattedRuntime ? [{ text: formattedRuntime }] : [])
-          : [{ text: `${entry?.totalEpisodes ?? data?.number_of_seasons ?? '—'} ${entry?.totalEpisodes ? 'EPISODES' : 'SEASONS'}` }]),
+          : [{ text: `${data?.number_of_episodes ?? entry?.totalEpisodes ?? '—'} EPISODES` }]),
         ...(typeof source.vote_average === 'number' && source.vote_average > 0
           ? [{ text: `IMDb ${source.vote_average.toFixed(1)}`, isImdb: true }]
           : []),
@@ -255,6 +255,18 @@ export default function TitleDetail({
 
         {source && (
           <div className="animate-fade">
+            {error && (
+              <div role="alert" className="mx-6 mt-4 flex flex-wrap items-center justify-between gap-3 border border-[var(--primary)]/20 bg-[var(--primary)]/5 px-3 py-2">
+                <span className="font-mono text-[11px] text-[var(--primary)]">Latest catalogue details unavailable · {error}</span>
+                <button
+                  type="button"
+                  onClick={() => setDetailAttempt((a) => a + 1)}
+                  className="press border border-[var(--primary)] px-3 py-1 font-sans text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--primary)] hover:bg-[var(--primary)] hover:text-primary-foreground"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
             <div className="grid gap-8 px-6 py-7 lg:grid-cols-[190px_1fr]">
               <div>
                 {img(entry?.poster ?? source.poster_path, 'w342') && (
@@ -308,7 +320,7 @@ export default function TitleDetail({
                 <div className="mt-auto flex flex-wrap items-center gap-x-6 gap-y-4 border-t border-border pt-5">
                   {!entry ? (
                     <button
-                      onClick={() => add({ status: 'planned' })}
+                      onClick={() => add({ status: settings.defaultStatus })}
                       className="press animate-tick flex h-8 items-center gap-2 bg-[var(--primary)] px-5 font-sans text-[11px] font-medium uppercase tracking-[0.16em] text-primary-foreground hover:opacity-85"
                     >
                       <svg
@@ -360,7 +372,7 @@ export default function TitleDetail({
                             {entry.rating ? `Rating: ${entry.rating}/10` : 'Rate title'}
                           </span>
                         </div>
-                        {entry.watchedAt && (
+                        {entry.watchedAt != null && (
                           <span className="font-mono text-[12px] tabular-nums text-muted-foreground">
                             {new Date(entry.watchedAt).toLocaleDateString('en-GB')}
                           </span>
@@ -628,6 +640,7 @@ function IconButton({
           onClick()
         }}
         aria-label={label}
+        aria-pressed={active}
         className={`press relative flex h-9 w-9 items-center justify-center border transition-colors ${
           tone === 'danger'
             ? 'border-[var(--destructive)]/40 bg-[var(--destructive)]/[0.06] text-[var(--destructive)] hover:border-[var(--destructive)] hover:bg-[var(--destructive)] hover:text-[var(--destructive-foreground)]'
@@ -1074,6 +1087,10 @@ function EditModal({
   }, [dismiss])
 
   const save = useCallback(() => {
+    if (draftStatus === 'watched' && draftWatchedAt == null) {
+      toast('Add a watch date before saving a watched title', 'error')
+      return
+    }
     const patch: Partial<Entry> = {}
     if (draftRating !== entry.rating) patch.rating = draftRating
     if (draftFavorite !== entry.favorite) patch.favorite = draftFavorite
@@ -1269,6 +1286,7 @@ function EditModal({
               <button
                 type="button"
                 onClick={() => setDraftFavorite(!draftFavorite)}
+                aria-pressed={draftFavorite}
                 className={`press flex h-8 w-full items-center justify-center gap-1.5 border px-2.5 font-sans text-[10px] font-medium uppercase tracking-[0.12em] ${
                   draftFavorite
                     ? 'border-[var(--primary)] text-[var(--primary)]'
@@ -1285,7 +1303,7 @@ function EditModal({
                 <button
                   type="button"
                   onClick={() => {
-                    if (draftWatchedAt || draftStatus === 'watched') {
+                    if (draftWatchedAt != null || draftStatus === 'watched') {
                       setDraftWatchedAt(null)
                       setDraftStatus('planned')
                     } else {
@@ -1294,20 +1312,20 @@ function EditModal({
                     }
                   }}
                   className={`press flex h-8 shrink-0 items-center gap-1.5 border px-3 font-sans text-[10px] font-medium uppercase tracking-[0.12em] ${
-                    draftWatchedAt || draftStatus === 'watched'
+                    draftWatchedAt != null || draftStatus === 'watched'
                       ? 'border-[var(--primary)] text-[var(--primary)]'
                       : 'border-border text-muted-foreground hover:border-[var(--foreground)] hover:text-foreground'
                   }`}
                 >
-                  {draftWatchedAt || draftStatus === 'watched' ? <CheckIcon /> : null}
-                  <span>{draftWatchedAt || draftStatus === 'watched' ? 'Watched' : 'Mark watched'}</span>
+                  {draftWatchedAt != null || draftStatus === 'watched' ? <CheckIcon /> : null}
+                  <span>{draftWatchedAt != null || draftStatus === 'watched' ? 'Watched' : 'Mark watched'}</span>
                 </button>
-                {(draftWatchedAt || draftStatus === 'watched') && (
+                {(draftWatchedAt != null || draftStatus === 'watched') && (
                   <input
                     type="date"
                     aria-label="Date watched"
                     max={todayInput()}
-                    value={draftWatchedAt ? toDateInput(draftWatchedAt) : ''}
+                    value={draftWatchedAt != null ? toDateInput(draftWatchedAt) : ''}
                     onChange={(ev) => {
                       if (!ev.target.value) return
                       const at = fromDateInput(ev.target.value)
@@ -1319,7 +1337,7 @@ function EditModal({
                     className="h-8 flex-1 border border-border bg-background px-2 font-mono text-[11px] outline-none focus:border-[var(--primary)]"
                   />
                 )}
-                {draftStatus === 'watched' && !draftWatchedAt && (
+                {draftStatus === 'watched' && draftWatchedAt == null && (
                   <button
                     type="button"
                     onClick={() => setDraftWatchedAt(Date.now())}
@@ -1709,7 +1727,7 @@ function Seasons({
   const seenIn = (s: { season_number: number; episode_count: number }) => {
     const eps = episodes[s.season_number]
     return eps
-      ? eps.filter((e) => watched[epKey(s.season_number, e.episode_number)]).length
+      ? eps.filter((e) => Object.prototype.hasOwnProperty.call(watched, epKey(s.season_number, e.episode_number))).length
       : Object.keys(watched).filter((k) => k.startsWith(`${s.season_number}-`)).length
   }
 
@@ -1837,7 +1855,8 @@ function Seasons({
                 )}
                 {eps?.map((e, i) => {
                   const loggedAt = watched[epKey(s.season_number, e.episode_number)]
-                  const done = !!loggedAt
+                  const done = loggedAt != null
+                  const spoilerHidden = spoilerFree && !done
                   return (
                     <div
                       key={e.id}
@@ -1848,6 +1867,7 @@ function Seasons({
                     >
                       <button
                         disabled={!tracked}
+                        aria-pressed={done}
                         onClick={() => onToggle(s.season_number, e.episode_number)}
                         className={`flex min-w-0 flex-1 items-center gap-4 px-4 py-3 text-left transition-colors ${
                           tracked ? 'hover:bg-secondary' : 'cursor-default'
@@ -1865,16 +1885,16 @@ function Seasons({
                         <span className="w-9 shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
                           E{String(e.episode_number).padStart(2, '0')}
                         </span>
-                        <span className="relative block aspect-video w-[124px] shrink-0 overflow-hidden border border-border bg-muted">
+                        <span className="relative hidden aspect-video w-[124px] shrink-0 overflow-hidden border border-border bg-muted sm:block">
                           {img(e.still_path, 'w185') ? (
                               <img
                                 src={img(e.still_path, 'w185')!}
-                                alt={`Still from ${e.name}`}
+                                alt={spoilerHidden ? 'Episode still hidden' : `Still from ${e.name}`}
                                 loading="lazy"
                                 decoding="async"
                                 width={185}
                                 height={104}
-                                className={`h-full w-full object-cover transition-all ${done ? 'opacity-55' : ''}`}
+                                className={`h-full w-full object-cover transition-all ${done ? 'opacity-55' : ''} ${spoilerHidden ? 'blur-lg' : ''}`}
                               />
                           ) : (
                             <span className="flex h-full items-center justify-center font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground">
@@ -1883,18 +1903,18 @@ function Seasons({
                           )}
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className={`block text-[14px] ${done ? 'text-muted-foreground line-through' : ''}`}>
-                            {e.name}
+                          <span className={`block text-[14px] ${done ? 'text-muted-foreground line-through' : ''} ${spoilerHidden ? 'select-none blur-sm' : ''}`}>
+                            {spoilerHidden ? 'Spoiler hidden' : e.name}
                           </span>
-                          {e.overview && !spoilerFree && (
+                          {e.overview && !spoilerHidden && (
                             <span className="mt-0.5 line-clamp-2 block text-[12px] leading-relaxed text-muted-foreground">
                               {e.overview}
                             </span>
                           )}
                         </span>
-                        <span className="shrink-0 text-right font-mono text-[10px] tabular-nums text-muted-foreground">
+                        <span className="hidden shrink-0 text-right font-mono text-[10px] tabular-nums text-muted-foreground sm:block">
                           <span className="block">{formatEpisodeDate(e.air_date)}</span>
-                          {e.runtime ? <span className="block">{e.runtime} min</span> : null}
+                          {!spoilerHidden && e.runtime ? <span className="block">{e.runtime} min</span> : null}
                         </span>
                       </button>
                     </div>

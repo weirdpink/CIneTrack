@@ -4,11 +4,12 @@ import App from './App'
 import './index.css'
 import { ToastProvider } from './components/Toast'
 
-class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
-  state = { error: null }
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null; errorId: string | null }> {
+  state = { error: null, errorId: null }
 
   static getDerivedStateFromError(error: Error) {
-    return { error }
+    const suffix = Math.random().toString(36).slice(2, 8)
+    return { error, errorId: `CT-${Date.now().toString(36)}-${suffix}` }
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
@@ -23,7 +24,9 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
         <div className="flex min-h-screen flex-col items-center justify-center bg-background p-6 text-foreground">
           <div className="max-w-lg border border-border bg-card p-6 shadow-lg">
             <h1 className="font-display text-[26px] text-[var(--primary)]">Something went wrong</h1>
-            <p className="mt-2 font-mono text-[12px] text-muted-foreground">{err.message}</p>
+            <p className="mt-2 font-mono text-[12px] text-muted-foreground">
+              {isDev ? err.message : 'The application hit an unexpected error. Try again or reload the page.'}
+            </p>
             {isDev && err.stack && (
               <pre className="mt-4 max-h-40 overflow-auto bg-muted p-3 font-mono text-[10px] text-muted-foreground">
                 {err.stack}
@@ -31,7 +34,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
             )}
             <div className="mt-6 flex flex-wrap gap-3">
               <button
-                onClick={() => this.setState({ error: null })}
+                onClick={() => this.setState({ error: null, errorId: null })}
                 className="press border border-border bg-[var(--primary)] px-4 py-2 font-sans text-[11px] font-medium uppercase tracking-[0.14em] text-primary-foreground"
               >
                 Try Again
@@ -43,7 +46,9 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | 
                 Reload Page
               </button>
             </div>
-            <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">If this keeps happening, export your library from Settings and share the error ID with support.</p>
+            <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">
+              Error ID: <span className="font-mono">{this.state.errorId}</span>. If this keeps happening, export your library from Settings before contacting support.
+            </p>
           </div>
         </div>
       )

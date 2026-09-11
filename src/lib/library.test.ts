@@ -13,6 +13,7 @@ import {
   recentCompletions,
   toDateInput,
   fromDateInput,
+  isValidTimestamp,
   useLibrary,
   type Entry,
 } from './library'
@@ -72,12 +73,23 @@ describe('normalizeEntry', () => {
     const e2 = normalizeEntry({ ...e })
     expect(normalizeEntry(e2)).toEqual(e2)
   })
+
+  it('keeps epoch timestamps while rejecting unsafe dates', () => {
+    const e = makeEntry({ addedAt: 0, watchedAt: 0, episodes: { '1-1': 0 }, rewatches: [0] })
+    expect(e.addedAt).toBe(0)
+    expect(e.watchedAt).toBe(0)
+    expect(e.episodes).toEqual({ '1-1': 0 })
+    expect(e.rewatches).toEqual([0])
+    expect(isValidTimestamp(Number.MAX_SAFE_INTEGER)).toBe(false)
+    expect(isValidTimestamp(0)).toBe(true)
+  })
 })
 
 describe('progress', () => {
   it('movie watched -> 1, not watched -> 0', () => {
     expect(progress(makeEntry({ mediaType: 'movie', watchedAt: Date.now() }))).toBe(1)
     expect(progress(makeEntry({ mediaType: 'movie', watchedAt: null }))).toBe(0)
+    expect(progress(makeEntry({ mediaType: 'movie', watchedAt: 0 }))).toBe(1)
   })
 
   it('tv without totalEpisodes returns 0', () => {
@@ -323,6 +335,18 @@ describe('store transitions', () => {
     })
     expect(Object.keys(api.get('tv', 13).episodes)).toHaveLength(0)
   })
+
+  it('can toggle an episode logged at the Unix epoch', async () => {
+    await act(async () => {
+      api.upsert('tv', 14, { totalEpisodes: 1, status: 'watching' })
+      api.toggleEpisode(14, 1, 1, 0)
+    })
+    expect(api.get('tv', 14).episodes['1-1']).toBe(0)
+    await act(async () => {
+      api.toggleEpisode(14, 1, 1, 0)
+    })
+    expect(api.get('tv', 14).episodes).toEqual({})
+  })
 })
 describe('toDateInput / fromDateInput', () => {
   it('round-trips today', () => {
@@ -338,6 +362,11 @@ describe('toDateInput / fromDateInput', () => {
     expect(fromDateInput('')).toBeNull()
     expect(fromDateInput('next friday')).toBeNull()
     expect(fromDateInput('2026-13-99')).toBeNull()
+  })
+
+  it('returns a safe fallback for invalid timestamps', () => {
+    expect(toDateInput(Number.NaN)).toBe('')
+    expect(formatRelativeDay(Number.NaN)).toBe('Unknown date')
   })
 })
 describe('formatRelativeDay', () => {

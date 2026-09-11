@@ -13,7 +13,7 @@ export default function Home({ onOpen }: { onOpen: (t: MediaType, id: number, se
   const stats = useMemo(() => {
     const movies = entries.filter((e) => e.mediaType === 'movie')
     const shows = entries.filter((e) => e.mediaType === 'tv')
-    const moviesSeen = movies.filter((m) => m.status === 'watched' || m.watchedAt).length
+    const moviesSeen = movies.filter((m) => m.status === 'watched' || m.watchedAt != null).length
     const showsSeen = shows.filter((s) => s.status === 'watched').length
     const eps = shows.reduce((s, e) => s + watchedCount(e), 0)
     const mins = minutesWatched(entries)

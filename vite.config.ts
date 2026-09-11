@@ -9,9 +9,6 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), cinetrackSqlitePersistence()],
   resolve: {
     dedupe: ['react', 'react-dom'],
-    alias: {
-      '@': path.resolve(import.meta.dirname, './src'),
-    },
   },
   server: {
     host: '127.0.0.1',
@@ -36,7 +33,7 @@ export default defineConfig({
       'Cross-Origin-Resource-Policy': 'same-origin',
       'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
       'Content-Security-Policy':
-        "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://image.tmdb.org data:; connect-src 'self' https://api.themoviedb.org; object-src 'none'; base-uri 'none'; form-action 'self'",
+        "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://image.tmdb.org data:; connect-src 'self' https://api.themoviedb.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; frame-src 'none'",
     },
     cors: false,
   },
@@ -51,7 +48,7 @@ export default defineConfig({
       'Cross-Origin-Resource-Policy': 'same-origin',
       'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
       'Content-Security-Policy':
-        "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://image.tmdb.org data:; connect-src 'self' https://api.themoviedb.org; object-src 'none'; base-uri 'none'; form-action 'self'",
+        "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://image.tmdb.org data:; connect-src 'self' https://api.themoviedb.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; frame-src 'none'",
     },
   },
   build: {
@@ -85,6 +82,7 @@ function cinetrackSqlitePersistence(): Plugin {
   const TMDB_BASE = 'https://api.themoviedb.org/3'
   const MAX_BODY_BYTES = 10 * 1024 * 1024 // 10 MB — allows 5000 entries (~2.9MB) + headroom
   const MAX_BODY_BYTES_SETTINGS = 256 * 1024
+  const MAX_TIMESTAMP = 8_640_000_000_000_000
   const CACHE_TTL_MS = 1000 * 60 * 60 * 24
   const MAX_CACHE_ENTRIES = 200
   const ALLOWED_TMDB_PREFIXES = ['/search/', '/discover/', '/trending/', '/movie/', '/tv/', '/genre/', '/person/']
@@ -98,6 +96,13 @@ function cinetrackSqlitePersistence(): Plugin {
     'vote_count.gte',
     'append_to_response',
   ])
+  const isSafeDbKey = (key: unknown): key is string => {
+    if (typeof key !== 'string') return false
+    const match = /^(movie|tv):(\d+)$/.exec(key)
+    return !!match && Number.isSafeInteger(Number(match[2])) && Number(match[2]) > 0
+  }
+  const isValidTimestamp = (value: unknown): value is number =>
+    typeof value === 'number' && Number.isSafeInteger(value) && Math.abs(value) <= MAX_TIMESTAMP
 
   let cachedApiKey: string | null = null
   let cachedApiKeyMtime = 0
@@ -169,15 +174,18 @@ function cinetrackSqlitePersistence(): Plugin {
   }
 
   function isAllowedTmdbPath(subpath: string): boolean {
-    // Normalize first to prevent /movie/../genre bypass — use dummy base to avoid /3 prefix
+    // Reject raw traversal before URL normalization; normalization alone would
+    // turn /movie/../genre into an allowed /genre path.
+    if (subpath.includes('\\') || /(?:^|\/)(?:\.{1,2})(?:\/|$)/.test(subpath) || /%2e/i.test(subpath)) return false
     let norm: string
     try {
-      norm = new URL(subpath, 'http://localhost').pathname
+      const u = new URL(subpath, 'http://localhost')
+      if (u.origin !== 'http://localhost') return false
+      norm = u.pathname
     } catch {
       norm = subpath.split('?')[0]
     }
-    // Block encoded traversal and double slash
-    if (norm.includes('%2e') || norm.includes('%2E') || norm.includes('//') || norm.includes('/./')) return false
+    if (norm.includes('%') || norm.includes('//') || norm.includes('/./')) return false
     return ALLOWED_TMDB_PREFIXES.some((prefix) => norm.startsWith(prefix))
   }
 
@@ -210,8 +218,9 @@ function cinetrackSqlitePersistence(): Plugin {
 
   async function openDb() {
     const SQL = await getSql()
+    const dbExists = fs.existsSync(DB_PATH)
     let buffer: Buffer | null = null
-    if (fs.existsSync(DB_PATH)) {
+    if (dbExists) {
       const st = fs.statSync(DB_PATH)
       // Bound what sql.js will parse — a runaway file must not OOM the server.
       // Oversize fails loudly (500): it must NOT fall through to an empty
@@ -219,22 +228,25 @@ function cinetrackSqlitePersistence(): Plugin {
       if (st.size > 64 * 1024 * 1024) throw new Error('DB file too large')
       try {
         buffer = fs.readFileSync(DB_PATH)
-      } catch {
-        buffer = null
+      } catch (e) {
+        throw new Error(`DB file unreadable: ${(e as Error).message}`)
       }
     }
     let db: any
     try {
       db = buffer ? new SQL.Database(buffer) : new SQL.Database()
-    } catch {
+    } catch (e) {
       // Corrupt DB: quarantine it aside and start fresh instead of 500ing forever.
+      if (!dbExists) throw e
       try {
         const q = `${DB_PATH}.corrupt.${Date.now()}`
         fs.renameSync(DB_PATH, q)
         try {
           console.warn(`[cinetrack-sqlite] corrupt DB quarantined at ${q}`)
         } catch {}
-      } catch {}
+      } catch (renameError) {
+        throw new Error(`DB file corrupt and could not be quarantined: ${(renameError as Error).message}`)
+      }
       db = new SQL.Database()
     }
     db.run(`
@@ -327,6 +339,35 @@ function cinetrackSqlitePersistence(): Plugin {
     }
   }
 
+  async function readResponseWithLimit(response: Response, limit: number): Promise<Buffer> {
+    const declared = Number(response.headers.get('content-length') ?? 0)
+    if (Number.isFinite(declared) && declared > limit) throw new Error('UPSTREAM_TOO_LARGE')
+    if (!response.body) {
+      const bytes = Buffer.from(await response.arrayBuffer())
+      if (bytes.length > limit) throw new Error('UPSTREAM_TOO_LARGE')
+      return bytes
+    }
+    const reader = response.body.getReader()
+    const chunks: Buffer[] = []
+    let size = 0
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const chunk = Buffer.from(value)
+        size += chunk.length
+        if (size > limit) {
+          await reader.cancel()
+          throw new Error('UPSTREAM_TOO_LARGE')
+        }
+        chunks.push(chunk)
+      }
+      return Buffer.concat(chunks)
+    } finally {
+      reader.releaseLock()
+    }
+  }
+
   // Simple LRU helpers for tmdbCache — fix FIFO and add sweeping
   function evictIfNeeded(cache: Map<string, any>) {
     if (cache.size > MAX_CACHE_ENTRIES) {
@@ -397,7 +438,9 @@ function cinetrackSqlitePersistence(): Plugin {
         }
 
         // Block direct access to sensitive files (case-insensitive: macOS fs is too)
-        const lowerPath = pathname.toLowerCase()
+        let decodedPath = pathname
+        try { decodedPath = decodeURIComponent(pathname) } catch { decodedPath = pathname }
+        const lowerPath = decodedPath.toLowerCase()
         if (lowerPath === '/api.txt' || lowerPath === '/vite.config.ts' || lowerPath.startsWith('/data/') || lowerPath === '/data') {
           res.statusCode = 404
           res.end()
@@ -499,6 +542,8 @@ function cinetrackSqlitePersistence(): Plugin {
             }
             const cached = tmdbCache.get(subpath)
             if (cached && cached.expires > Date.now()) {
+              tmdbCache.delete(subpath)
+              tmdbCache.set(subpath, cached)
               res.statusCode = cached.status
               res.setHeader('Content-Type', cached.contentType)
               res.setHeader('X-Cache', 'HIT')
@@ -536,11 +581,14 @@ function cinetrackSqlitePersistence(): Plugin {
             const controller = new AbortController()
             const timeout = setTimeout(() => controller.abort(), 10000)
             let upstreamRes: Response
+            let bodyBytes: Buffer
             try {
               upstreamRes = await fetch(targetUrl, {
                 headers: isV4 ? { Authorization: `Bearer ${key}` } : undefined,
                 signal: controller.signal,
+                redirect: 'error',
               })
+              bodyBytes = await readResponseWithLimit(upstreamRes, 1024 * 1024)
             } finally {
               clearTimeout(timeout)
             }
@@ -551,21 +599,7 @@ function cinetrackSqlitePersistence(): Plugin {
             // Bound upstream bodies to 1MB by bytes (not UTF-16 length), with a
             // content-length pre-check — larger payloads are rejected, never
             // truncated-and-cached (a truncated body would poison the cache).
-            const declared = Number(upstreamRes.headers.get('content-length') ?? 0)
-            if (Number.isFinite(declared) && declared > 1024 * 1024) {
-              res.statusCode = 502
-              res.setHeader('Content-Type', 'application/json')
-              res.end(JSON.stringify({ error: 'Upstream response too large' }))
-              return
-            }
-            const text = await upstreamRes.text()
-            if (Buffer.byteLength(text) > 1024 * 1024) {
-              res.statusCode = 502
-              res.setHeader('Content-Type', 'application/json')
-              res.end(JSON.stringify({ error: 'Upstream response too large' }))
-              return
-            }
-            const body = text
+            const body = bodyBytes.toString('utf8')
 
             if (req.method !== 'HEAD' && upstreamRes.ok && contentType === 'application/json' && status === 200) {
               tmdbCache.set(subpath, { status, contentType, body, expires: Date.now() + CACHE_TTL_MS })
@@ -585,10 +619,11 @@ function cinetrackSqlitePersistence(): Plugin {
             return
           } catch (err) {
             const isAbort = (err as Error).name === 'AbortError'
+            const tooLarge = (err as Error).message === 'UPSTREAM_TOO_LARGE'
             server.config.logger.warn(`[cinetrack-tmdb-proxy] ${isAbort ? 'timeout' : (err as Error).message}`)
             res.statusCode = isAbort ? 504 : 502
             res.setHeader('Content-Type', 'application/json')
-            res.end(JSON.stringify({ error: isAbort ? 'TMDb upstream timeout' : 'Failed to contact TMDb upstream' }))
+            res.end(JSON.stringify({ error: isAbort ? 'TMDb upstream timeout' : tooLarge ? 'Upstream response too large' : 'Failed to contact TMDb upstream' }))
             return
           }
         }
@@ -604,8 +639,7 @@ function cinetrackSqlitePersistence(): Plugin {
                 const [key, json] = stmt.get() as [string, string]
                 try {
                   // Validate key shape to prevent prototype pollution
-                  if (typeof key !== 'string' || !/^(movie|tv):\d+$/.test(key)) continue
-                  if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue
+                  if (!isSafeDbKey(key)) continue
                   out[key] = JSON.parse(json)
                 } catch {
                   /* skip malformed */
@@ -657,28 +691,58 @@ function cinetrackSqlitePersistence(): Plugin {
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                   `)
                   for (const [key, val] of Object.entries(map)) {
-                    if (typeof key !== 'string' || !/^(movie|tv):\d+$/.test(key)) continue
-                    if (key === '__proto__' || key === 'constructor') continue
+                    if (!isSafeDbKey(key)) continue
                     if (!val || typeof val !== 'object') continue
+                    const [mediaType, rawId] = key.split(':') as ['movie' | 'tv', string]
+                    const id = Number(rawId)
+                    if (val.mediaType !== mediaType || val.id !== id) continue
+                    const episodes: Record<string, number> = {}
+                    if (val.episodes && typeof val.episodes === 'object' && !Array.isArray(val.episodes)) {
+                      for (const [episodeKey, stamp] of Object.entries(val.episodes as Record<string, unknown>)) {
+                        if (Object.keys(episodes).length >= 20000) break
+                        if (/^\d+-\d+$/.test(episodeKey) && isValidTimestamp(stamp)) episodes[episodeKey] = stamp
+                      }
+                    }
+                    const rewatches = Array.isArray(val.rewatches) ? val.rewatches.filter(isValidTimestamp).slice(-500) : []
+                    const addedAt = isValidTimestamp(val.addedAt) ? val.addedAt : Date.now()
+                    const watchedAt = isValidTimestamp(val.watchedAt) ? val.watchedAt : null
+                    const normalized = {
+                      id,
+                      mediaType,
+                      title: typeof val.title === 'string' && val.title ? val.title.slice(0, 200) : 'Untitled',
+                      year: typeof val.year === 'string' ? val.year.slice(0, 4) : '',
+                      poster: typeof val.poster === 'string' && val.poster.length <= 500 ? val.poster : null,
+                      backdrop: typeof val.backdrop === 'string' && val.backdrop.length <= 500 ? val.backdrop : null,
+                      rating: typeof val.rating === 'number' && Number.isInteger(val.rating) && val.rating >= 1 && val.rating <= 10 ? val.rating : null,
+                      status: ['planned', 'watching', 'watched', 'dropped'].includes(val.status) ? val.status : 'planned',
+                      favorite: !!val.favorite,
+                      addedAt,
+                      watchedAt,
+                      runtime: typeof val.runtime === 'number' && Number.isFinite(val.runtime) ? Math.min(600, Math.max(0, Math.floor(val.runtime))) : null,
+                      totalEpisodes: typeof val.totalEpisodes === 'number' && Number.isFinite(val.totalEpisodes) ? Math.min(10000, Math.max(0, Math.floor(val.totalEpisodes))) : null,
+                      episodes,
+                      rewatches,
+                      ...(typeof val.note === 'string' ? { note: val.note.slice(0, 2000) } : {}),
+                    }
                     stmt.run([
                       key,
-                      val.mediaType ?? null,
-                      val.id ?? null,
-                      typeof val.title === 'string' ? val.title.slice(0, 200) : '',
-                      typeof val.year === 'string' ? val.year.slice(0, 4) : null,
-                      typeof val.poster === 'string' ? val.poster.slice(0, 500) : null,
-                      typeof val.backdrop === 'string' ? val.backdrop.slice(0, 500) : null,
-                      typeof val.rating === 'number' && val.rating >= 1 && val.rating <= 10 ? val.rating : null,
-                      ['planned', 'watching', 'watched', 'dropped'].includes(val.status) ? val.status : 'planned',
-                      val.favorite ? 1 : 0,
-                      typeof val.addedAt === 'number' ? val.addedAt : Date.now(),
-                      typeof val.watchedAt === 'number' ? val.watchedAt : null,
-                      typeof val.runtime === 'number' && Number.isFinite(val.runtime) ? Math.min(600, Math.max(0, Math.floor(val.runtime))) : null,
-                      typeof val.totalEpisodes === 'number' && Number.isFinite(val.totalEpisodes) ? Math.min(10000, Math.max(0, Math.floor(val.totalEpisodes))) : null,
-                      JSON.stringify(val.episodes && typeof val.episodes === 'object' ? val.episodes : {}),
-                      JSON.stringify(Array.isArray(val.rewatches) ? val.rewatches.slice(0, 500) : []),
-                      typeof val.note === 'string' ? val.note.slice(0, 2000) : null,
-                      JSON.stringify(val),
+                      normalized.mediaType,
+                      normalized.id,
+                      normalized.title,
+                      normalized.year,
+                      normalized.poster,
+                      normalized.backdrop,
+                      normalized.rating,
+                      normalized.status,
+                      normalized.favorite ? 1 : 0,
+                      normalized.addedAt,
+                      normalized.watchedAt,
+                      normalized.runtime,
+                      normalized.totalEpisodes,
+                      JSON.stringify(normalized.episodes),
+                      JSON.stringify(normalized.rewatches),
+                      normalized.note ?? null,
+                      JSON.stringify(normalized),
                     ])
                   }
                   stmt.free()
@@ -806,6 +870,7 @@ function cinetrackSqlitePersistence(): Plugin {
         // 4. Raw DB export endpoint
         if (pathname === '/__data/db-export' && (req.method === 'GET' || req.method === 'HEAD')) {
           try {
+            await writeChain
             if (!fs.existsSync(DB_PATH)) {
               const initDb = await openDb()
               persist(initDb)

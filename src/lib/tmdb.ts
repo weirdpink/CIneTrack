@@ -56,6 +56,37 @@ const MAX_CACHE_ENTRIES = 200
 const CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes for client, server has 24h
 type CacheEntry = { promise: Promise<unknown>; expires: number }
 const clientCache = new Map<string, CacheEntry>()
+const MAX_RESPONSE_BYTES = 2 * 1024 * 1024
+type RequestOptions = { signal?: AbortSignal }
+
+async function readResponseText(response: Response): Promise<string> {
+  if (!response.body) {
+    const text = await response.text()
+    if (new TextEncoder().encode(text).byteLength > MAX_RESPONSE_BYTES) throw new Error('TMDb response was too large')
+    return text
+  }
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      total += value.byteLength
+      if (total > MAX_RESPONSE_BYTES) {
+        await reader.cancel()
+        throw new Error('TMDb response was too large')
+      }
+      chunks.push(value)
+    }
+  } finally {
+    reader.releaseLock()
+  }
+  let out = ''
+  for (const chunk of chunks) out += decoder.decode(chunk, { stream: true })
+  return out + decoder.decode()
+}
 
 /** Test-only: drop the client cache so tests never share inflight responses. */
 export function __clearTmdbCache() {
@@ -157,7 +188,29 @@ export async function tmdb<T>(  path: string,
       const timeout = setTimeout(() => controller.abort(), timeoutMs)
       let res: Response
       try {
-        res = await fetch(url, { signal: controller.signal })
+        res = await fetch(url, { signal: controller.signal, redirect: 'error' })
+        const text = await readResponseText(res)
+        clearTimeout(timeout)
+
+        if (!res.ok) {
+          const ct = res.headers.get('content-type') || ''
+          let body: unknown = {}
+          try {
+            if (ct.includes('application/json')) body = JSON.parse(text)
+            else body = { status_message: text.slice(0, 500) }
+          } catch {}
+          const msg = (body as { status_message?: string; error?: string })?.status_message ?? (body as { error?: string })?.error
+          const retry = res.headers.get('retry-after')
+          throw new Error(msg ?? `TMDb request failed (${res.status})${retry ? ` — retry after ${retry}s` : ''}`)
+        }
+
+        const ct = res.headers.get('content-type') || ''
+        if (!ct.includes('application/json')) throw new Error(`Unexpected TMDb response: ${text.slice(0, 200)}`)
+        try {
+          return JSON.parse(text) as T
+        } catch {
+          throw new Error('TMDb returned malformed JSON')
+        }
       } catch (e) {
         clearTimeout(timeout)
         const err = e as Error
@@ -166,26 +219,6 @@ export async function tmdb<T>(  path: string,
         if (err.name === 'AbortError') throw new Error('TMDb request timed out — please retry')
         throw e
       }
-      clearTimeout(timeout)
-
-      if (!res.ok) {
-        const ct = res.headers.get('content-type') || ''
-        let body: unknown = {}
-        try {
-          if (ct.includes('application/json')) body = await res.json()
-          else body = { status_message: await res.text().then((t) => t.slice(0, 500)) }
-        } catch {}
-        const msg = (body as { status_message?: string; error?: string })?.status_message ?? (body as { error?: string })?.error
-        const retry = res.headers.get('retry-after')
-        throw new Error(msg ?? `TMDb request failed (${res.status})${retry ? ` — retry after ${retry}s` : ''}`)
-      }
-
-      const ct = res.headers.get('content-type') || ''
-      if (!ct.includes('application/json')) {
-        const txt = await res.text().then((t) => t.slice(0, 200))
-        throw new Error(`Unexpected TMDb response: ${txt}`)
-      }
-      return (await res.json()) as T
     }
     throw new Error('TMDb request timed out — please retry')
   })()
@@ -223,36 +256,37 @@ export const yearOf = (t: TmdbTitle) => (t.release_date ?? t.first_air_date ?? '
 
 export type Page = { results: TmdbTitle[]; page: number; total_pages: number }
 
-export const searchMulti = (query: string, page = 1) => {
+export const searchMulti = (query: string, page = 1, opts?: RequestOptions) => {
   const q = query.trim().slice(0, 100)
   if (!q) return Promise.resolve({ results: [], page: 1, total_pages: 1 } as Page)
-  return tmdb<Page>('/search/multi', { query: q, include_adult: String(currentSettings().includeAdult), page }).then((r) => ({
+  return tmdb<Page>('/search/multi', { query: q, include_adult: String(currentSettings().includeAdult), page }, opts).then((r) => ({
     ...r,
     results: r.results.filter((x) => x.media_type === 'movie' || x.media_type === 'tv'),
   }))
 }
 
-export const trending = (type: 'all' | MediaType, window: 'day' | 'week' = 'week', page = 1) => {
+export const trending = (type: 'all' | MediaType, window: 'day' | 'week' = 'week', page = 1, opts?: RequestOptions) => {
   if (page < 1 || page > 1000) page = 1
-  return tmdb<Page>(`/trending/${type}/${window}`, { page })
+  return tmdb<Page>(`/trending/${type}/${window}`, { page }, opts)
 }
 
-export const recommendations = (type: MediaType, id: number, page = 1) => {
+export const recommendations = (type: MediaType, id: number, page = 1, opts?: RequestOptions) => {
   if (!Number.isInteger(id) || id <= 0 || id > 1e9) return Promise.reject(new Error('Invalid TMDb id'))
   if (page < 1 || page > 1000) page = 1
-  return tmdb<Page>(`/${type}/${id}/recommendations`, { page })
+  return tmdb<Page>(`/${type}/${id}/recommendations`, { page }, opts)
 }
 
 export const discover = (
   type: MediaType,
   opts: { sort_by?: string; with_genres?: string; page?: number; 'vote_count.gte'?: number } = {},
+  requestOpts?: RequestOptions,
 ) =>
   tmdb<Page>(`/discover/${type}`, {
     page: 1,
     'vote_count.gte': 50,
     include_adult: String(currentSettings().includeAdult),
     ...opts,
-  })
+  }, requestOpts)
 export const details = (type: MediaType, id: number, opts?: { signal?: AbortSignal }) => {
   if (!Number.isInteger(id) || id <= 0 || id > 1e9) return Promise.reject(new Error('Invalid TMDb id'))
   return tmdb<TitleDetail>(`/${type}/${id}`, { append_to_response: 'credits,external_ids' }, opts)
@@ -263,7 +297,8 @@ export const season = (id: number, seasonNumber: number, opts?: { signal?: Abort
   if (!Number.isInteger(seasonNumber) || seasonNumber < 0 || seasonNumber > 1000) return Promise.reject(new Error('Invalid season number'))
   return tmdb<{ episodes: Episode[]; name: string; overview: string }>(`/tv/${id}/season/${seasonNumber}`, {}, opts)
 }
-export const genreList = (type: MediaType) => tmdb<{ genres: { id: number; name: string }[] }>(`/genre/${type}/list`).then((r) => r.genres)
+export const genreList = (type: MediaType, opts?: RequestOptions) =>
+  tmdb<{ genres: { id: number; name: string }[] }>(`/genre/${type}/list`, {}, opts).then((r) => r.genres)
 
 export type PersonDetail = {
   id: number

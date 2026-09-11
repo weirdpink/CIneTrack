@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { useBodyScrollLock } from '../lib/bodyLock'
 import { LANGUAGES, THEMES, useSettings } from '../lib/settings'
 import { minutesWatched, parseLibraryImport, useLibrary, watchedCount } from '../lib/library'
-import { ConfirmDialog, Chip, useFocusTrap } from './ui'
+import { ConfirmDialog, Chip, useBodyScrollLock, useFocusTrap } from './ui'
 import { useToast } from './Toast'
 
 export default function SettingsPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -498,7 +497,7 @@ function OptionsRow<T extends string>({
       {note && <span className="rule-label mt-0.5 block">{note}</span>}
       <div className="mt-2 flex flex-wrap gap-1.5" role="radiogroup" aria-label={label}>
         {options.map((o) => (
-          <Chip key={o.id} active={value === o.id} onClick={() => onChange(o.id)}>
+          <Chip key={o.id} role="radio" active={value === o.id} onClick={() => onChange(o.id)}>
             {o.label}
           </Chip>
         ))}

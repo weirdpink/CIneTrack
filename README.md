@@ -14,7 +14,7 @@ SQLite database that lives inside the project folder.
 ## Features
 
 ### Library
-- **Poster shelf** withDensity-aware grids, staggered entrances, and status badges
+- **Poster shelf** with density-aware grids, staggered entrances, and status badges
 - **Statuses** — `Planned` · `Watching` · `Watched` · `Dropped` (series-only
   `Watching`; setting a show to `Watched` fills every real season while leaving
   Specials/extras untouched; back to `Planned` clears the episode log)
@@ -60,8 +60,8 @@ SQLite database that lives inside the project folder.
 | Storage    | `localStorage` (source of truth) + SQLite mirror   |
 | SQLite     | `sql.js` (dev/preview server middleware only)       |
 | Metadata   | TMDb via same-origin proxy (`/api/tmdb`)            |
-| Tests      | Vitest + Testing Library + jsdom (51 tests)         |
-| CI         | GitHub Actions: typecheck → tests → build           |
+| Tests      | Vitest 5 + Testing Library + jsdom                  |
+| CI         | GitHub Actions: audit → typecheck → tests → build  |
 
 ---
 
@@ -82,14 +82,12 @@ SQLite database that lives inside the project folder.
 │   │   ├── TitleDetail.tsx     # Catalogue drawer, seasons, edit + rewatch modals
 │   │   ├── SettingsPanel.tsx   # Themes, columns, import/export, wipe
 │   │   ├── InfoPages.tsx       # About / privacy / API info
-│   │   ├── ui.tsx              # Shared primitives (badges, chips, dialogs, focus trap)
-│   │   ├── Toast.tsx           # Toast provider (single live region)
-│   │   └── Logo.tsx            # Brand mark + wordmark
+│   │   ├── ui.tsx              # Shared primitives, brand marks, dialogs, focus trap, scroll lock
+│   │   └── Toast.tsx           # Toast provider (single live region)
 │   ├── lib/
 │   │   ├── library.ts          # Store: statuses, episodes, rewatches, metrics
 │   │   ├── tmdb.ts             # Cached TMDb client (timeout + retry + abort)
-│   │   ├── settings.ts         # Preferences store with schema passthrough
-│   │   └── bodyLock.ts         # Ref-counted scroll lock
+│   │   └── settings.ts         # Preferences store with schema passthrough
 │   └── test/setup.ts           # localStorage + fetch mocks
 ├── data/cinetrack.db           # Your library (gitignored, portable)
 └── .github/workflows/ci.yml    # Typecheck, tests, build
@@ -114,7 +112,7 @@ be wedged by a failing disk or network mirror.
 ### Setup
 
 ```bash
-npm install
+npm ci
 ```
 
 Provide the key **either** as a `TMDB_KEY` environment variable **or** in a
@@ -133,13 +131,15 @@ npm run dev      # dev server on $PORT (default 8443)
 npm test
 npm run typecheck
 npm run build
-npm run preview  # serve the production build with data endpoints
+npm run start     # serve the production build with data endpoints
 ```
 
 > The catalogue (search, details, episode lists) and the SQLite mirror are
-> served by the dev/preview server. A plain static host keeps full library
-> tracking on `localStorage`, but TMDb features need the server. Treat
-> `vite preview` (or an equivalent tiny Node host) as the production target.
+> served by the local dev/preview server. The server binds to `127.0.0.1` and
+> is intended for one-machine use; do not expose it publicly without adding
+> authentication, TLS, authorization, and a persistent-volume strategy. A
+> plain static host keeps library tracking on `localStorage`, but TMDb features
+> need the server. `npm run start` is the supported local production preview.
 
 ---
 
@@ -159,12 +159,16 @@ npm run preview  # serve the production build with data endpoints
 ## Privacy & data
 
 - Library + settings live in `data/cinetrack.db` (SQLite) and browser
-  `localStorage`; either side can rebuild the other on startup
+  `localStorage`; localStorage is the synchronous client authority and SQLite
+  is a best-effort portable mirror
 - The only network calls are same-origin `/api/tmdb` metadata requests
   (proxied, allowlisted, rate-limited, cached 24h) and TMDb image CDN loads
 - Corrupt payloads are quarantined to `*.corrupt` backups, never deleted
 - Export anytime from Settings; the database file itself is portable — copy
   the folder and your archive moves with it
+- The local database and browser storage are plaintext on the machine. Protect
+  the project directory and browser profile if the archive contains sensitive
+  information.
 
 ---
 

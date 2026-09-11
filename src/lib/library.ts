@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useSyncExternalStore } from 'react'
 import type { MediaType, TmdbTitle } from './tmdb'
 import { titleOf, yearOf } from './tmdb'
 import { currentSettings } from './settings'
@@ -41,24 +41,28 @@ export const entryKey = (type: MediaType, id: number) => `${type}:${id}`
 const MAX_TITLE_LEN = 200
 const MAX_NOTE_LEN = 2000
 const MAX_POSTER_LEN = 500
+const MAX_BACKDROP_LEN = 500
+const MAX_RUNTIME = 600
+const MAX_TOTAL_EPISODES = 10000
 const MAX_EPISODE_KEYS = 20000
+const MAX_TIMESTAMP = 8_640_000_000_000_000
 
 /** Map keys must be `movie:<id>` / `tv:<id>` — anything else (incl. __proto__
  *  style keys from crafted imports) is dropped before it can touch the store. */
 export function isSafeKey(key: unknown): key is string {
-  return (
-    typeof key === 'string' &&
-    /^(movie|tv):\d+$/.test(key) &&
-    key !== '__proto__' &&
-    key !== 'constructor' &&
-    key !== 'prototype'
-  )
+  if (typeof key !== 'string') return false
+  const match = /^(movie|tv):(\d+)$/.exec(key)
+  return !!match && Number.isSafeInteger(Number(match[2])) && Number(match[2]) > 0
 }
 
 const STATUSES: Status[] = ['planned', 'watching', 'watched', 'dropped']
 
 function finiteOrNull(n: unknown): number | null {
   return typeof n === 'number' && Number.isFinite(n) ? n : null
+}
+
+export function isValidTimestamp(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && Math.abs(value) <= MAX_TIMESTAMP
 }
 
 /**
@@ -70,7 +74,7 @@ export function normalizeEntry(entry: Entry): Entry {
   if ((entry.status as string) === 'completed') entry.status = 'watched'
   if (!STATUSES.includes(entry.status)) entry.status = 'planned'
   if (entry.mediaType !== 'movie' && entry.mediaType !== 'tv') entry.mediaType = 'movie'
-  if (!Number.isInteger(entry.id) || (entry.id as number) < 0) entry.id = 0
+  if (!Number.isSafeInteger(entry.id) || (entry.id as number) <= 0) entry.id = 0
   if (typeof entry.title !== 'string' || !entry.title) entry.title = 'Untitled'
   else entry.title = entry.title.slice(0, MAX_TITLE_LEN)
   if (typeof entry.year !== 'string') entry.year = ''
@@ -78,21 +82,22 @@ export function normalizeEntry(entry: Entry): Entry {
   if (typeof entry.poster !== 'string') entry.poster = null
   else if (entry.poster.length > MAX_POSTER_LEN) entry.poster = null
   if (typeof entry.backdrop !== 'string') entry.backdrop = null
+  else if (entry.backdrop.length > MAX_BACKDROP_LEN) entry.backdrop = null
   if (typeof entry.rating !== 'number' || !Number.isInteger(entry.rating) || entry.rating < 1 || entry.rating > 10) {
     entry.rating = null
   }
   entry.favorite = !!entry.favorite
-  entry.addedAt = typeof entry.addedAt === 'number' && Number.isFinite(entry.addedAt) ? entry.addedAt : Date.now()
-  entry.watchedAt = finiteOrNull(entry.watchedAt)
+  entry.addedAt = isValidTimestamp(entry.addedAt) ? entry.addedAt : Date.now()
+  entry.watchedAt = isValidTimestamp(entry.watchedAt) ? entry.watchedAt : null
   const runtime = finiteOrNull(entry.runtime)
-  entry.runtime = runtime == null ? null : Math.max(0, runtime)
+  entry.runtime = runtime == null ? null : Math.min(MAX_RUNTIME, Math.max(0, Math.floor(runtime)))
   const total = finiteOrNull(entry.totalEpisodes)
-  entry.totalEpisodes = total == null ? null : Math.max(0, Math.floor(total))
+  entry.totalEpisodes = total == null ? null : Math.min(MAX_TOTAL_EPISODES, Math.max(0, Math.floor(total)))
   if (!entry.episodes || typeof entry.episodes !== 'object') entry.episodes = {}
   else {
     const keys = Object.keys(entry.episodes)
     for (const [k, v] of Object.entries(entry.episodes)) {
-      if (!/^\d+-\d+$/.test(k) || typeof v !== 'number' || !Number.isFinite(v)) delete entry.episodes[k]
+      if (!/^\d+-\d+$/.test(k) || !isValidTimestamp(v)) delete entry.episodes[k]
     }
     // Bound per-entry growth so one crafted row can't stall every commit.
     if (keys.length > MAX_EPISODE_KEYS) {
@@ -101,7 +106,7 @@ export function normalizeEntry(entry: Entry): Entry {
     }
   }
   if (!Array.isArray(entry.rewatches)) entry.rewatches = []
-  else entry.rewatches = entry.rewatches.filter((t) => typeof t === 'number' && Number.isFinite(t)).slice(-MAX_REWATCHES)
+  else entry.rewatches = entry.rewatches.filter(isValidTimestamp).slice(-MAX_REWATCHES)
   if (typeof entry.note === 'string' && entry.note.length > MAX_NOTE_LEN) entry.note = entry.note.slice(0, MAX_NOTE_LEN)
   else if (entry.note != null && typeof entry.note !== 'string') entry.note = undefined
   return entry
@@ -127,16 +132,20 @@ function sanitizeMap(raw: unknown): Record<string, Entry> {
   return out
 }
 
+let localSnapshotPresent = false
+
 function read(): Record<string, Entry> {
   try {
     const raw = localStorage.getItem(STORAGE)
     if (!raw) return {}
+    localSnapshotPresent = true
     return sanitizeMap(JSON.parse(raw))
   } catch {
     try {
       const raw = localStorage.getItem(STORAGE) ?? ''
       localStorage.setItem(STORAGE_CORRUPT, raw.slice(0, 20000))
       localStorage.removeItem(STORAGE)
+      localSnapshotPresent = false
       console.warn('[library] local data corrupted, backed up')
     } catch {}
     return {}
@@ -144,6 +153,7 @@ function read(): Record<string, Entry> {
 }
 
 const listeners = new Set<() => void>()
+const noopSubscribe = () => () => {}
 let cache = read()
 /**
  * Stable array snapshot. Rebuilt only on commit, so consumers can safely use
@@ -164,8 +174,9 @@ const DB_ENDPOINT = '/__data/library'
 let hydrating = true
 let mutatedDuringHydration = false
 
-/** Serialize mirror POSTs so rapid commits land in order, never stale-last. */
-let mirrorChain: Promise<void> = Promise.resolve()
+/** Coalesce rapid full-snapshot writes so bulk episode updates do not queue stale payloads. */
+let pendingMirrorBody: string | null = null
+let mirrorRunning = false
 function mirrorToSqlite(map: Record<string, Entry>) {
   if (hydrating) {
     mutatedDuringHydration = true
@@ -173,30 +184,34 @@ function mirrorToSqlite(map: Record<string, Entry>) {
   }
   try {
     if (typeof fetch !== 'function') return
-    const body = JSON.stringify(map)
-    const send = (): Promise<void> => {
-      try {
+    pendingMirrorBody = JSON.stringify(map)
+    if (mirrorRunning) return
+    mirrorRunning = true
+    void (async () => {
+      while (pendingMirrorBody !== null) {
+        const body = pendingMirrorBody
+        pendingMirrorBody = null
         const controller = new AbortController()
         const timeout = setTimeout(() => controller.abort(), 8000)
-        return fetch(DB_ENDPOINT, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body,
-          keepalive: true,
-          signal: controller.signal,
-        }).then(
-          () => {
-            clearTimeout(timeout)
-          },
-          () => {
-            clearTimeout(timeout)
-          },
-        )
-      } catch {
-        return Promise.resolve()
+        try {
+          const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden'
+          const keepalive = hidden && new TextEncoder().encode(body).byteLength <= 64 * 1024
+          const res = await fetch(DB_ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body,
+            keepalive,
+            signal: controller.signal,
+          })
+          if (!res.ok) console.warn(`[library] SQLite mirror rejected snapshot (${res.status})`)
+        } catch (e) {
+          console.warn('[library] SQLite mirror unavailable', e)
+        } finally {
+          clearTimeout(timeout)
+        }
       }
-    }
-    mirrorChain = mirrorChain.then(send, send)
+      mirrorRunning = false
+    })()
   } catch {
     /* a synchronously-throwing fetch must never break UI updates */
   }
@@ -229,14 +244,11 @@ async function hydrateFromSqlite() {
       return
     }
     const map = sanitizeMap(await res.json().catch(() => ({})))
-    if (Object.keys(map).length > 0) {
-      if (mutatedDuringHydration) {
-        // Local writes happened mid-flight — merge with local winning per key.
-        commit({ ...map, ...cache })
-      } else {
-        commit(map)
-      }
-    } else if (Object.keys(cache).length > 0) {
+    if (Object.keys(map).length > 0 && !localSnapshotPresent) {
+      commit(map)
+    } else if (localSnapshotPresent || Object.keys(cache).length > 0) {
+      // localStorage is authoritative. A present empty snapshot is meaningful:
+      // it can represent an intentional archive wipe.
       hydrating = false
       mirrorToSqlite(cache)
       return
@@ -254,9 +266,16 @@ function commit(next: Record<string, Entry>) {
   snapshot = Object.values(next)
   // Subscribers first: the UI must reflect the write even if persistence
   // below throws (private-mode quota, blocked endpoint, …).
-  listeners.forEach((fn) => fn())
+  for (const fn of [...listeners]) {
+    try {
+      fn()
+    } catch (e) {
+      console.error('[library] subscriber failed', e)
+    }
+  }
   try {
     localStorage.setItem(STORAGE, JSON.stringify(next))
+    localSnapshotPresent = true
   } catch (e) {
     // Memory + UI stay live and the SQLite mirror may still land; warn loudly
     // instead of failing silently, and retry on the next commit.
@@ -267,17 +286,22 @@ function commit(next: Record<string, Entry>) {
 
 void hydrateFromSqlite()
 
-export function useLibrary() {
-  const [, force] = useState(0)
-  useEffect(() => {
-    const fn = () => force((n) => n + 1)
-    listeners.add(fn)
-    return () => void listeners.delete(fn)
-  }, [])
+export function useLibrary(subscribeToStore = true) {
+  const entries = useSyncExternalStore(
+    subscribeToStore
+      ? (fn) => {
+          listeners.add(fn)
+          return () => listeners.delete(fn)
+        }
+      : noopSubscribe,
+    () => snapshot,
+    () => snapshot,
+  )
 
   const get = useCallback((type: MediaType, id: number) => cache[entryKey(type, id)], [])
 
   const upsert = useCallback((type: MediaType, id: number, patch: Partial<Entry>, seed?: TmdbTitle) => {
+    if ((type !== 'movie' && type !== 'tv') || !Number.isSafeInteger(id) || id <= 0) return
     const key = entryKey(type, id)
     const existing = cache[key]
     const base: Entry = existing ?? {
@@ -297,10 +321,11 @@ export function useLibrary() {
       totalEpisodes: null,
       rewatches: [],
     }
-    commit({ ...cache, [key]: { ...base, ...patch } })
+    commit({ ...cache, [key]: normalizeEntry({ ...base, ...patch }) })
   }, [])
 
   const remove = useCallback((type: MediaType, id: number) => {
+    if ((type !== 'movie' && type !== 'tv') || !Number.isSafeInteger(id) || id <= 0) return
     const next = { ...cache }
     delete next[entryKey(type, id)]
     commit(next)
@@ -313,9 +338,9 @@ export function useLibrary() {
     const entry = cache[key]
     if (!entry) return
     const k = epKey(s, e)
-    const stamp = at ?? Date.now()
+    const stamp = isValidTimestamp(at) ? at : Date.now()
     const episodes = { ...entry.episodes }
-    if (episodes[k]) delete episodes[k]
+    if (Object.prototype.hasOwnProperty.call(episodes, k)) delete episodes[k]
     else episodes[k] = Number.isFinite(stamp) ? stamp : Date.now()
     const watched = Object.keys(episodes).length
     const finished = currentSettings().autoCompleteSeries && !!entry.totalEpisodes && watched >= entry.totalEpisodes
@@ -333,7 +358,7 @@ export function useLibrary() {
     const episodes = { ...entry.episodes }
     for (const n of numbers) {
       if (!Number.isInteger(n) || n < 0) continue
-      if (watched) episodes[epKey(s, n)] = episodes[epKey(s, n)] ?? at ?? Date.now()
+      if (watched) episodes[epKey(s, n)] = episodes[epKey(s, n)] ?? (isValidTimestamp(at) ? at : Date.now())
       else delete episodes[epKey(s, n)]
     }
     const count = Object.keys(episodes).length
@@ -351,17 +376,17 @@ export function useLibrary() {
     const entry = cache[key]
     if (!entry) return
     const stamp = at ?? Date.now()
-    if (!Number.isFinite(stamp)) return
+    if (!isValidTimestamp(stamp)) return
     const rewatches = [...(entry.rewatches ?? []), stamp].sort((a, b) => a - b).slice(-MAX_REWATCHES)
     commit({ ...cache, [key]: { ...entry, rewatches } })
   }, [])
 
   /** Rewrite one logged rewatch date by its index. */
   const setRewatchDate = useCallback((type: MediaType, id: number, index: number, at: number) => {
-    if (!Number.isFinite(at)) return
+    if (!isValidTimestamp(at)) return
     const key = entryKey(type, id)
     const entry = cache[key]
-    if (!entry?.rewatches?.[index]) return
+    if (!entry?.rewatches || !Number.isInteger(index) || index < 0 || index >= entry.rewatches.length) return
     const rewatches = [...entry.rewatches]
     rewatches[index] = at
     rewatches.sort((a, b) => a - b)
@@ -380,7 +405,7 @@ export function useLibrary() {
   const clear = useCallback(() => commit({}), [])
 
   return {
-    entries: snapshot,
+    entries,
     get,
     upsert,
     remove,
@@ -399,7 +424,11 @@ if (typeof window !== 'undefined') {
   // in the tab that wrote, so this cannot loop). Comparison is key-order
   // insensitive so identical maps don't ping-pong rewrites between tabs.
   window.addEventListener('storage', (e) => {
-    if (e.key !== STORAGE || !e.newValue) return
+    if (e.key !== STORAGE) return
+    if (e.newValue === null) {
+      commit({})
+      return
+    }
     try {
       const next = sanitizeMap(JSON.parse(e.newValue))
       if (stableStringify(next) !== stableStringify(cache)) commit(next)
@@ -435,12 +464,17 @@ export function parseLibraryImport(text: string, existing: Entry[]): ImportResul
   let skipped = 0
   for (const raw of parsed) {
     const e = raw as Partial<Entry>
-    if (typeof e?.id !== 'number' || (e?.mediaType !== 'movie' && e?.mediaType !== 'tv')) {
+    if (!Number.isSafeInteger(e?.id) || (e?.id as number) <= 0 || (e?.mediaType !== 'movie' && e?.mediaType !== 'tv')) {
       skipped++
       continue
     }
     try {
-      merged[`${e.mediaType}:${e.id}`] = normalizeEntry(e as Entry)
+      const key = `${e.mediaType}:${e.id}`
+      if (!isSafeKey(key)) {
+        skipped++
+        continue
+      }
+      merged[key] = normalizeEntry(e as Entry)
       imported++
     } catch {
       skipped++
@@ -453,6 +487,7 @@ export function parseLibraryImport(text: string, existing: Entry[]): ImportResul
 
 /** Timestamp → yyyy-mm-dd in local time (toISOString would shift the day). */
 export function toDateInput(ts: number) {
+  if (!isValidTimestamp(ts)) return ''
   const d = new Date(ts)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
@@ -491,12 +526,18 @@ function maxTime(times: readonly unknown[]): number | null {
   return max
 }
 
+function latestTime(a: number | null, b: number | null): number | null {
+  if (a == null) return b
+  if (b == null) return a
+  return Math.max(a, b)
+}
+
 function validStamp(at: unknown): at is number {
-  return typeof at === 'number' && Number.isFinite(at)
+  return isValidTimestamp(at)
 }
 
 export function progress(e: Entry) {
-  if (e.mediaType === 'movie') return e.watchedAt ? 1 : 0
+  if (e.mediaType === 'movie') return e.watchedAt != null && validStamp(e.watchedAt) ? 1 : 0
   if (!e.totalEpisodes || e.totalEpisodes <= 0) return 0
   return Math.min(1, Math.max(0, watchedCount(e) / e.totalEpisodes))
 }
@@ -505,19 +546,21 @@ export function progress(e: Entry) {
 export function minutesWatched(entries: Entry[]) {
   return entries.reduce((sum, e) => {
     const runtime = typeof e.runtime === 'number' && Number.isFinite(e.runtime) ? Math.max(0, e.runtime) : 0
-    if (e.mediaType === 'movie') return sum + (e.watchedAt ? (runtime || 110) : 0)
+    if (e.mediaType === 'movie') return sum + (e.watchedAt != null && validStamp(e.watchedAt) ? (runtime || 110) : 0)
     return sum + watchedCount(e) * (runtime || 42)
   }, 0)
 }
 
 /** Consistent short date for ledger microcopy (en-GB: "05 Sept"). */
 export function formatDayMonth(at: number) {
+  if (!isValidTimestamp(at)) return 'Unknown date'
   return new Date(at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
 }
 
 /** Friendly relative date for the ledger ("Today", "3d ago"); falls back to
  *  the absolute form once the stamp is a year or more old. */
 export function formatRelativeDay(at: number, now = Date.now()) {
+  if (!isValidTimestamp(at) || !isValidTimestamp(now)) return 'Unknown date'
   const day = 86_400_000
   const startOfDay = (ts: number) => {
     const d = new Date(ts)
@@ -543,7 +586,7 @@ export function formatRelativeDay(at: number, now = Date.now()) {
  *  otherwise the latest logged episode or rewatch. */
 export function lastActivityAt(e: Entry): number | null {
   if (validStamp(e.watchedAt)) return e.watchedAt
-  return maxTime([...Object.values(e.episodes ?? {}), ...(e.rewatches ?? [])])
+  return latestTime(maxTime(Object.values(e.episodes ?? {})), maxTime(e.rewatches ?? []))
 }
 
 export type Activity = { entry: Entry; at: number; label: string }
@@ -602,7 +645,7 @@ export function activityByMonth(entries: Entry[], months = 12) {
   }
   for (const e of entries) {
     if (e.mediaType === 'movie') {
-      if (e.watchedAt) bump(e.watchedAt)
+      if (e.watchedAt != null) bump(e.watchedAt)
     } else if (e.status === 'watched') {
       const at = validStamp(e.watchedAt) ? e.watchedAt : maxTime(Object.values(e.episodes ?? {}))
       if (at != null) bump(at)

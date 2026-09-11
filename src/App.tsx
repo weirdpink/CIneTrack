@@ -2,8 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { type MediaType, type TmdbTitle } from './lib/tmdb'
 import { useLibrary } from './lib/library'
 import { useSettings } from './lib/settings'
-import { Logo } from './components/Logo'
-import { Spinner } from './components/ui'
+import { Logo, Spinner } from './components/ui'
 import InfoPage, { INFO_LINKS, type InfoSlug } from './components/InfoPages'
 
 const Home = lazy(() => import('./components/Home'))
@@ -179,7 +178,16 @@ export default function App() {
 
       <Suspense fallback={null}>
         <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-        {open && <TitleDetail type={open.type} id={open.id} seed={open.seed} onClose={() => setOpen(null)} onOpenTitle={openTitle} />}
+        {open && (
+          <TitleDetail
+            key={`${open.type}-${open.id}`}
+            type={open.type}
+            id={open.id}
+            seed={open.seed}
+            onClose={() => setOpen(null)}
+            onOpenTitle={openTitle}
+          />
+        )}
       </Suspense>
     </div>
   )

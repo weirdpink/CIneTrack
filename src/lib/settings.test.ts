@@ -46,7 +46,6 @@ describe('settings unknown-key passthrough', () => {
     expect(s.defaultStatus).toBe('planned')
     expect(s.defaultShelfTab).toBe('tv')
     expect(s.defaultSort).toBe('added')
-    expect(s.chartStyle).toBe('area')
     expect(s.dateStyle).toBe('relative')
     expect(s.posterQuality).toBe('saver')
     expect(s.metadataLanguage).toBe('en-US')
