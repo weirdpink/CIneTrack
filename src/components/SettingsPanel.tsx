@@ -107,7 +107,7 @@ export default function SettingsPanel({ open, onClose }: { open: boolean; onClos
         </header>
 
         <div className="divide-y divide-border">
-          <Group index="01" title="Theme" note="Ground and ink for the whole archive.">
+          <Group title="Theme" note="Ground and ink for the whole archive.">
             <div className="grid grid-cols-4 gap-3">
               {THEMES.map((t) => {
                 const active = settings.theme === t.id
@@ -152,7 +152,7 @@ export default function SettingsPanel({ open, onClose }: { open: boolean; onClos
             </div>
           </Group>
 
-          <Group index="02" title="Presentation" note="How plates and ledgers are laid out.">
+          <Group title="Presentation" note="How plates and ledgers are laid out.">
             <NumberStepper
               label="Library items per row"
               note="Columns in library plates grid"
@@ -183,7 +183,7 @@ export default function SettingsPanel({ open, onClose }: { open: boolean; onClos
             />
           </Group>
 
-          <Group index="03" title="Holdings & storage" note="Local archive state and persistence.">
+          <Group title="Holdings & storage" note="Local archive state and persistence.">
             <div className="space-y-2">
               <div className="rule-label text-[10px]">Collection Overview</div>
               <div className="grid grid-cols-3 gap-2 border border-border bg-card p-3">
@@ -297,24 +297,19 @@ export default function SettingsPanel({ open, onClose }: { open: boolean; onClos
 }
 
 function Group({
-  index,
   title,
   note,
   children,
 }: {
-  index: string
   title: string
   note?: string
   children: React.ReactNode
 }) {
   return (
     <section className="px-6 py-6">
-      <div className="mb-4 flex items-baseline gap-3">
-        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--accent)]">{index}</span>
-        <div>
-          <h3 className="font-display text-[22px] leading-none">{title}</h3>
-          {note && <p className="mt-1 text-[12px] text-muted-foreground">{note}</p>}
-        </div>
+      <div className="mb-4">
+        <h3 className="font-display text-[22px] leading-none">{title}</h3>
+        {note && <p className="mt-1 text-[12px] text-muted-foreground">{note}</p>}
       </div>
       <div className="space-y-4">{children}</div>
     </section>
