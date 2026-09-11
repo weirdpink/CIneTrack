@@ -247,8 +247,8 @@ export default function SettingsPanel({ open, onClose }: { open: boolean; onClos
               onChange={(v) => set('defaultWatchDate', v)}
             />
             <Toggle
-              label="Hide spoilers"
-              note="Blur episode titles and descriptions for unreached installments."
+              label="Hide episode descriptions"
+              note="Hide descriptions for unwatched installments."
               value={settings.hideSpoilers}
               onChange={(v) => set('hideSpoilers', v)}
             />

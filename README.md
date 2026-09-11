@@ -29,7 +29,7 @@ SQLite database that lives inside the project folder.
   clickable Known-for filmography that jumps between titles
 - **Series:** per-season episode tracking with stills, air dates, runtimes,
   season progress bars, bulk mark/unmark (unmarking a full season asks first),
-  and spoiler-free mode
+  and optional episode description hiding
 - **Rewatch log:** date-stamped repeat viewings with edit/remove + confirm
 - **Edit Metadata:** draft-only editor (nothing saves until **Save**),
   ratings 1–10, favourite flag, watched date, custom titles/years/runtimes,

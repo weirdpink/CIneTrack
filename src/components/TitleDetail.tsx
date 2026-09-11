@@ -1687,7 +1687,7 @@ function Seasons({
   const [seasonAttempt, setSeasonAttempt] = useState(0)
   const [confirmClear, setConfirmClear] = useState<number | null>(null)
   const fetchedRef = useRef<Set<number>>(new Set())
-  const spoilerFree = useSettings().settings.hideSpoilers
+  const hideDescriptions = useSettings().settings.hideSpoilers
   const { toast } = useToast()
 
   // Reset fetched set when show changes
@@ -1856,7 +1856,7 @@ function Seasons({
                 {eps?.map((e, i) => {
                   const loggedAt = watched[epKey(s.season_number, e.episode_number)]
                   const done = loggedAt != null
-                  const spoilerHidden = spoilerFree && !done
+                  const descriptionHidden = hideDescriptions && !done
                   return (
                     <div
                       key={e.id}
@@ -1889,12 +1889,12 @@ function Seasons({
                           {img(e.still_path, 'w185') ? (
                               <img
                                 src={img(e.still_path, 'w185')!}
-                                alt={spoilerHidden ? 'Episode still hidden' : `Still from ${e.name}`}
+                                alt={`Still from ${e.name}`}
                                 loading="lazy"
                                 decoding="async"
                                 width={185}
                                 height={104}
-                                className={`h-full w-full object-cover transition-all ${done ? 'opacity-55' : ''} ${spoilerHidden ? 'blur-lg' : ''}`}
+                                className={`h-full w-full object-cover transition-all ${done ? 'opacity-55' : ''}`}
                               />
                           ) : (
                             <span className="flex h-full items-center justify-center font-mono text-[9px] uppercase tracking-[0.12em] text-muted-foreground">
@@ -1903,10 +1903,10 @@ function Seasons({
                           )}
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className={`block text-[14px] ${done ? 'text-muted-foreground line-through' : ''} ${spoilerHidden ? 'select-none blur-sm' : ''}`}>
-                            {spoilerHidden ? 'Spoiler hidden' : e.name}
+                          <span className={`block text-[14px] ${done ? 'text-muted-foreground line-through' : ''}`}>
+                            {e.name}
                           </span>
-                          {e.overview && !spoilerHidden && (
+                          {e.overview && !descriptionHidden && (
                             <span className="mt-0.5 line-clamp-2 block text-[12px] leading-relaxed text-muted-foreground">
                               {e.overview}
                             </span>
@@ -1914,7 +1914,7 @@ function Seasons({
                         </span>
                         <span className="hidden shrink-0 text-right font-mono text-[10px] tabular-nums text-muted-foreground sm:block">
                           <span className="block">{formatEpisodeDate(e.air_date)}</span>
-                          {!spoilerHidden && e.runtime ? <span className="block">{e.runtime} min</span> : null}
+                          {e.runtime ? <span className="block">{e.runtime} min</span> : null}
                         </span>
                       </button>
                     </div>
