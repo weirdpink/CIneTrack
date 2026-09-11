@@ -1,4 +1,4 @@
-import { currentSettings } from './settings'
+import { currentSettings, LANGUAGES } from './settings'
 
 const BASE = '/api/tmdb'
 
@@ -88,8 +88,12 @@ function setCache(url: string, promise: Promise<unknown>) {
   clientCache.set(url, { promise, expires: Date.now() + CACHE_TTL_MS })
 }
 
-export async function tmdb<T>(
-  path: string,
+/** Allowlisted UI locale for TMDb metadata; unknown values fall back to en-US. */
+function sanitizeLanguage(lang: unknown): string {
+  return typeof lang === 'string' && LANGUAGES.some((l) => l.id === lang) ? lang : 'en-US'
+}
+
+export async function tmdb<T>(  path: string,
   params: Record<string, string | number> = {},
   opts: { signal?: AbortSignal; timeoutMs?: number } = {},
 ): Promise<T> {
@@ -104,7 +108,7 @@ export async function tmdb<T>(
     'vote_count.gte',
     'append_to_response',
   ])
-  const filtered: Record<string, string> = { language: 'en-US' }
+  const filtered: Record<string, string> = { language: sanitizeLanguage(currentSettings().metadataLanguage) }
   for (const [k, v] of Object.entries(params)) {
     if (!allowedKeys.has(k)) continue
     const val = String(v)

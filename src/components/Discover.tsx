@@ -281,7 +281,7 @@ export default function Discover({ onOpen }: { onOpen: (t: MediaType, id: number
       .catch(() => { if (live) setGenres([]) })
     setGenre(null)
     return () => { live = false }
-  }, [mode, type])
+  }, [mode, type, settings.metadataLanguage])
 
   const shelfToken = useRef(0)
 
@@ -386,7 +386,7 @@ export default function Discover({ onOpen }: { onOpen: (t: MediaType, id: number
       }
     })()
     return () => { live = false }
-  }, [gridActive, seedSig, settings.includeAdult, shelfRetry])
+  }, [gridActive, seedSig, settings.includeAdult, settings.metadataLanguage, shelfRetry])
 
   /** One page of whichever feed is active. Suggestions walk the seed list. */
   const fetchPage = useCallback(
@@ -410,7 +410,7 @@ export default function Discover({ onOpen }: { onOpen: (t: MediaType, id: number
         ...(genre ? { with_genres: String(genre) } : {}),
       }).then((r) => ({ ...r, results: r.results.map((x) => ({ ...x, media_type: type })) }))
     },
-    [searching, debounced, mode, type, sort, genre, settings.includeAdult],
+    [searching, debounced, mode, type, sort, genre, settings.includeAdult, settings.metadataLanguage],
   )
 
   const feedToken = useRef(0)

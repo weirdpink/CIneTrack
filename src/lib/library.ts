@@ -515,6 +515,30 @@ export function formatDayMonth(at: number) {
   return new Date(at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
 }
 
+/** Friendly relative date for the ledger ("Today", "3d ago"); falls back to
+ *  the absolute form once the stamp is a year or more old. */
+export function formatRelativeDay(at: number, now = Date.now()) {
+  const day = 86_400_000
+  const startOfDay = (ts: number) => {
+    const d = new Date(ts)
+    d.setHours(0, 0, 0, 0)
+    return d.getTime()
+  }
+  const diff = Math.max(0, Math.round((startOfDay(now) - startOfDay(at)) / day))
+  if (diff <= 0) return 'Today'
+  if (diff === 1) return 'Yesterday'
+  if (diff < 7) return `${diff}d ago`
+  if (diff < 30) {
+    const w = Math.floor(diff / 7)
+    return w <= 1 ? '1w ago' : `${w}w ago`
+  }
+  if (diff < 365) {
+    const m = Math.floor(diff / 30)
+    return m <= 1 ? '1mo ago' : `${m}mo ago`
+  }
+  return formatDayMonth(at)
+}
+
 /** Latest viewing timestamp: your recorded watch date wins when present,
  *  otherwise the latest logged episode or rewatch. */
 export function lastActivityAt(e: Entry): number | null {

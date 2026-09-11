@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { img, person, personCredits, type MediaType, type PersonCredit, type PersonDetail } from '../lib/tmdb'
+import { useSettings } from '../lib/settings'
 import { useFocusTrap } from './ui'
 import { Spinner } from './ui'
 
@@ -37,6 +38,7 @@ export default function CastDetail({
   const closeTimer = useRef<number | null>(null)
   const onCloseRef = useRef(onClose)
   onCloseRef.current = onClose
+  const metadataLanguage = useSettings().settings.metadataLanguage
 
   const close = useCallback(() => {
     setShown(false)
@@ -63,7 +65,7 @@ export default function CastDetail({
       live = false
       controller.abort()
     }
-  }, [personId, attempt])
+  }, [personId, attempt, metadataLanguage])
 
   useEffect(() => {
     let raf2 = 0

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
 import {
   activityByMonth,
+  formatRelativeDay,
   lastActivityAt,
   minutesWatched,
   normalizeEntry,
@@ -337,5 +338,27 @@ describe('toDateInput / fromDateInput', () => {
     expect(fromDateInput('')).toBeNull()
     expect(fromDateInput('next friday')).toBeNull()
     expect(fromDateInput('2026-13-99')).toBeNull()
+  })
+})
+describe('formatRelativeDay', () => {
+  const noon = (y: number, m: number, d: number) => new Date(y, m - 1, d, 12).getTime()
+  it('names today and yesterday', () => {
+    const now = noon(2026, 9, 11)
+    expect(formatRelativeDay(now, now)).toBe('Today')
+    expect(formatRelativeDay(noon(2026, 9, 10), now)).toBe('Yesterday')
+  })
+  it('counts days, weeks, then months', () => {
+    const now = noon(2026, 9, 11)
+    expect(formatRelativeDay(noon(2026, 9, 8), now)).toBe('3d ago')
+    expect(formatRelativeDay(noon(2026, 8, 28), now)).toBe('2w ago')
+    expect(formatRelativeDay(noon(2026, 7, 1), now)).toBe('2mo ago')
+  })
+  it('falls back to the absolute form past a year', () => {
+    const now = noon(2026, 9, 11)
+    expect(formatRelativeDay(noon(2025, 3, 4), now)).toMatch(/Mar/)
+  })
+  it('never goes negative for future stamps', () => {
+    const now = noon(2026, 9, 11)
+    expect(formatRelativeDay(noon(2026, 9, 20), now)).toBe('Today')
   })
 })

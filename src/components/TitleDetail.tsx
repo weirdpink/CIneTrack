@@ -56,6 +56,7 @@ export default function TitleDetail({
   const { toast } = useToast()
   useBodyScrollLock(true)
   useFocusTrap(panelRef)
+  const metadataLanguage = useSettings().settings.metadataLanguage
   const castTrackRef = useRef<HTMLDivElement>(null)
   const {
     get,
@@ -102,7 +103,7 @@ export default function TitleDetail({
       live = false
       controller.abort()
     }
-  }, [type, id, detailAttempt])
+  }, [type, id, detailAttempt, metadataLanguage])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -1028,6 +1029,7 @@ function EditModal({
   useFocusTrap(boxRef)
   const closeTimer = useRef<number | null>(null)
   const { toast } = useToast()
+  const prefillToday = useSettings().settings.defaultWatchDate === 'today'
   // See StatusModal: keep close identity stable across parent re-renders.
   const onCloseRef = useRef(onClose)
   onCloseRef.current = onClose
@@ -1283,29 +1285,29 @@ function EditModal({
                 <button
                   type="button"
                   onClick={() => {
-                    if (draftWatchedAt) {
+                    if (draftWatchedAt || draftStatus === 'watched') {
                       setDraftWatchedAt(null)
                       setDraftStatus('planned')
                     } else {
-                      setDraftWatchedAt(Date.now())
+                      setDraftWatchedAt(prefillToday ? Date.now() : null)
                       setDraftStatus('watched')
                     }
                   }}
                   className={`press flex h-8 shrink-0 items-center gap-1.5 border px-3 font-sans text-[10px] font-medium uppercase tracking-[0.12em] ${
-                    draftWatchedAt
+                    draftWatchedAt || draftStatus === 'watched'
                       ? 'border-[var(--primary)] text-[var(--primary)]'
                       : 'border-border text-muted-foreground hover:border-[var(--foreground)] hover:text-foreground'
                   }`}
                 >
-                  {draftWatchedAt ? <CheckIcon /> : null}
-                  <span>{draftWatchedAt ? 'Watched' : 'Mark watched'}</span>
+                  {draftWatchedAt || draftStatus === 'watched' ? <CheckIcon /> : null}
+                  <span>{draftWatchedAt || draftStatus === 'watched' ? 'Watched' : 'Mark watched'}</span>
                 </button>
-                {draftWatchedAt && (
+                {(draftWatchedAt || draftStatus === 'watched') && (
                   <input
                     type="date"
                     aria-label="Date watched"
                     max={todayInput()}
-                    value={toDateInput(draftWatchedAt)}
+                    value={draftWatchedAt ? toDateInput(draftWatchedAt) : ''}
                     onChange={(ev) => {
                       if (!ev.target.value) return
                       const at = fromDateInput(ev.target.value)
@@ -1316,6 +1318,15 @@ function EditModal({
                     }}
                     className="h-8 flex-1 border border-border bg-background px-2 font-mono text-[11px] outline-none focus:border-[var(--primary)]"
                   />
+                )}
+                {draftStatus === 'watched' && !draftWatchedAt && (
+                  <button
+                    type="button"
+                    onClick={() => setDraftWatchedAt(Date.now())}
+                    className="press flex h-8 shrink-0 items-center border border-border px-3 font-sans text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground hover:border-[var(--foreground)] hover:text-foreground"
+                  >
+                    Today
+                  </button>
                 )}
               </div>
             </Field>

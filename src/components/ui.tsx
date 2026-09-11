@@ -255,9 +255,15 @@ export const Poster = memo(function Poster({
   const { upsert } = useLibrary()
   const { toast } = useToast()
   const type: MediaType = (item.media_type ?? (item.title ? 'movie' : 'tv')) as MediaType
-  const src = img(item.poster_path, 'w342')
+  const saver = settings.posterQuality === 'saver'
+  const src = img(item.poster_path, saver ? 'w185' : 'w342')
+  const srcSet = saver
+    ? `${img(item.poster_path, 'w185')} 185w`
+    : `${img(item.poster_path, 'w185')} 185w, ${img(item.poster_path, 'w342')} 342w, ${img(item.poster_path, 'w500')} 500w`
   const compact = settings.density === 'compact'
   const pct = entry ? progress(entry) : 0
+  const community =
+    settings.showCommunityScores && item.vote_average > 0 ? item.vote_average.toFixed(1) : null
 
   const [imgLoaded, setImgLoaded] = useState(false)
   const imgRef = useRef<HTMLImageElement>(null)
@@ -284,7 +290,7 @@ export const Poster = memo(function Poster({
             <img
               ref={imgRef}
               src={src}
-              srcSet={`${img(item.poster_path, 'w185')} 185w, ${img(item.poster_path, 'w342')} 342w, ${img(item.poster_path, 'w500')} 500w`}
+              srcSet={srcSet}
               sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 16vw"
               alt={`Poster for ${titleOf(item)}`}
               loading="lazy"
@@ -321,10 +327,11 @@ export const Poster = memo(function Poster({
                     title: titleOf(item),
                     poster: item.poster_path,
                     year: yearOf(item),
-                    status: 'planned',
+                    status: settings.defaultStatus,
                     totalEpisodes: (item as unknown as { number_of_episodes?: number | null }).number_of_episodes ?? null,
                   })
                   toast(`Added ${titleOf(item)} to library`, 'success')
+                  if (settings.openAfterAdd) onOpen(type, item.id, item)
                 } catch (err) {
                   console.error(err)
                   toast(`Couldn't add ${titleOf(item)} — please retry`, 'error')
@@ -369,7 +376,10 @@ export const Poster = memo(function Poster({
         >
           {titleOf(item)}
         </span>
-        <span className="font-mono text-[10px] tabular-nums text-muted-foreground">{yearOf(item) || '—'}</span>
+        <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
+          {yearOf(item) || '—'}
+          {community && <span className="text-[var(--accent)]"> · ★ {community}</span>}
+        </span>
       </button>
       <div className="rule-label mt-0.5">{type === 'movie' ? 'Movie' : 'Series'}</div>
     </div>

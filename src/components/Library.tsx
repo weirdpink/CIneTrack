@@ -58,9 +58,9 @@ export default function Library({
 }) {
   const { entries, get } = useLibrary()
   const { settings } = useSettings()
-  const [tab, setTab] = useState<Tab>('all')
+  const [tab, setTab] = useState<Tab>(settings.defaultShelfTab)
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>('all')
-  const [sort, setSort] = useState<(typeof SORTS)[number]['id']>('added')
+  const [sort, setSort] = useState<(typeof SORTS)[number]['id']>(settings.defaultSort)
   const [minRating, setMinRating] = useState<(typeof RATING_OPTIONS)[number]['id']>(0)
   const [q, setQ] = useState('')
 
@@ -132,7 +132,7 @@ export default function Library({
           <button
             onClick={() => {
               setFilter('all')
-              setSort('added')
+              setSort(settings.defaultSort)
               setMinRating(0)
               setQ('')
             }}
@@ -202,6 +202,7 @@ function FilterBar({
   const [open, setOpen] = useState(false)
   const wrap = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const { settings } = useSettings()
 
   useEffect(() => {
     if (!open) return
@@ -222,8 +223,8 @@ function FilterBar({
     }
   }, [open])
 
-  const active = filter !== 'all' || sort !== 'added' || minRating > 0
-  const activeCount = (filter !== 'all' ? 1 : 0) + (sort !== 'added' ? 1 : 0) + (minRating > 0 ? 1 : 0)
+  const active = filter !== 'all' || sort !== settings.defaultSort || minRating > 0
+  const activeCount = (filter !== 'all' ? 1 : 0) + (sort !== settings.defaultSort ? 1 : 0) + (minRating > 0 ? 1 : 0)
   const sortLabel = SORTS.find((s) => s.id === sort)?.label
 
   return (
@@ -292,7 +293,7 @@ function FilterBar({
             <button
               onClick={() => {
                 onFilter('all')
-                onSort('added')
+                onSort(settings.defaultSort)
                 onMinRating(0)
               }}
               className="press mt-1 font-sans text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground underline underline-offset-4 hover:text-[var(--primary)]"

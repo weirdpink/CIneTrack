@@ -2,6 +2,26 @@ import { useCallback, useSyncExternalStore } from 'react'
 
 export type ThemeId = 'paper' | 'halide' | 'velvet' | 'blueprint'
 
+export const DEFAULT_ARCHIVE_NAME = 'The Standing Collection'
+
+export const LANGUAGES: { id: string; label: string }[] = [
+  { id: 'en-US', label: 'English' },
+  { id: 'de-DE', label: 'Deutsch' },
+  { id: 'es-ES', label: 'Español' },
+  { id: 'fr-FR', label: 'Français' },
+  { id: 'it-IT', label: 'Italiano' },
+  { id: 'nl-NL', label: 'Nederlands' },
+  { id: 'pl-PL', label: 'Polski' },
+  { id: 'pt-BR', label: 'Português' },
+  { id: 'ja-JP', label: '日本語' },
+  { id: 'ko-KR', label: '한국어' },
+  { id: 'zh-CN', label: '中文' },
+]
+
+const STATUS_IDS = ['planned', 'watching'] as const
+const TAB_IDS = ['all', 'movie', 'tv', 'favorites'] as const
+const SORT_IDS = ['added', 'lastWatched', 'title', 'rating', 'year'] as const
+
 export const THEMES: { id: ThemeId; name: string; note: string; tone: 'light' | 'dark'; swatch: [string, string, string] }[] = [
   { id: 'paper', name: 'Paper', note: 'True white stock, oxblood ink', tone: 'light', swatch: ['#ffffff', '#14130f', '#7a2318'] },
   { id: 'blueprint', name: 'Blueprint', note: 'Cool slate, technical ink', tone: 'light', swatch: ['#eef1f4', '#131a21', '#1f5673'] },
@@ -18,6 +38,18 @@ export type Settings = {
   libraryColumns: number
   discoverColumns: number
   includeAdult: boolean
+  archiveName: string
+  showNavHints: boolean
+  defaultStatus: (typeof STATUS_IDS)[number]
+  openAfterAdd: boolean
+  defaultWatchDate: 'today' | 'blank'
+  defaultShelfTab: (typeof TAB_IDS)[number]
+  defaultSort: (typeof SORT_IDS)[number]
+  showCommunityScores: boolean
+  chartStyle: 'area'
+  dateStyle: 'absolute' | 'relative'
+  posterQuality: 'standard' | 'saver'
+  metadataLanguage: string
 }
 
 const DEFAULTS: Settings = {
@@ -29,6 +61,18 @@ const DEFAULTS: Settings = {
   libraryColumns: 6,
   discoverColumns: 7,
   includeAdult: false,
+  archiveName: DEFAULT_ARCHIVE_NAME,
+  showNavHints: true,
+  defaultStatus: 'planned',
+  openAfterAdd: false,
+  defaultWatchDate: 'today',
+  defaultShelfTab: 'all',
+  defaultSort: 'added',
+  showCommunityScores: false,
+  chartStyle: 'area',
+  dateStyle: 'absolute',
+  posterQuality: 'standard',
+  metadataLanguage: 'en-US',
 }
 
 const STORAGE = 'archive.settings.v1'
@@ -48,6 +92,29 @@ function sanitize(s: Partial<Settings> & Record<string, unknown>): Settings {
   out.hideSpoilers = !!s.hideSpoilers
   out.autoCompleteSeries = s.autoCompleteSeries !== false
   out.posterMotion = s.posterMotion !== false
+  out.showNavHints = s.showNavHints !== false
+  out.openAfterAdd = !!s.openAfterAdd
+  out.showCommunityScores = !!s.showCommunityScores
+  if (typeof s.archiveName === 'string' && s.archiveName.trim()) {
+    out.archiveName = s.archiveName.trim().slice(0, 48)
+  }
+  if ((STATUS_IDS as readonly string[]).includes(s.defaultStatus as string)) {
+    out.defaultStatus = s.defaultStatus as Settings['defaultStatus']
+  }
+  if (s.defaultWatchDate === 'today' || s.defaultWatchDate === 'blank') out.defaultWatchDate = s.defaultWatchDate
+  if ((TAB_IDS as readonly string[]).includes(s.defaultShelfTab as string)) {
+    out.defaultShelfTab = s.defaultShelfTab as Settings['defaultShelfTab']
+  }
+  if ((SORT_IDS as readonly string[]).includes(s.defaultSort as string)) {
+    out.defaultSort = s.defaultSort as Settings['defaultSort']
+  }
+  // Chart style is fixed to area
+  out.chartStyle = 'area'
+  if (s.dateStyle === 'absolute' || s.dateStyle === 'relative') out.dateStyle = s.dateStyle
+  if (s.posterQuality === 'standard' || s.posterQuality === 'saver') out.posterQuality = s.posterQuality
+  if (typeof s.metadataLanguage === 'string' && LANGUAGES.some((l) => l.id === s.metadataLanguage)) {
+    out.metadataLanguage = s.metadataLanguage
+  }
   out.libraryColumns = clamp(s.libraryColumns, 3, 12, DEFAULTS.libraryColumns)
   out.discoverColumns = clamp(s.discoverColumns, 3, 12, DEFAULTS.discoverColumns)
   out.includeAdult = !!s.includeAdult

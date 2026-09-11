@@ -1,12 +1,14 @@
 import { Suspense, lazy, useMemo, useState } from 'react'
 import { img, type MediaType, type TmdbTitle } from '../lib/tmdb'
-import { formatDayMonth, minutesWatched, progress, recentCompletions, useLibrary, watchedCount } from '../lib/library'
+import { formatDayMonth, formatRelativeDay, minutesWatched, progress, recentCompletions, useLibrary, watchedCount } from '../lib/library'
+import { useSettings } from '../lib/settings'
 import { Empty, SectionHead, Stat } from './ui'
 
 const MonthlyChart = lazy(() => import('./MonthlyChart'))
 
 export default function Home({ onOpen }: { onOpen: (t: MediaType, id: number, seed?: TmdbTitle) => void }) {
   const { entries } = useLibrary()
+  const { settings } = useSettings()
 
   const stats = useMemo(() => {
     const movies = entries.filter((e) => e.mediaType === 'movie')
@@ -52,10 +54,7 @@ export default function Home({ onOpen }: { onOpen: (t: MediaType, id: number, se
           <p className="animate-fade rule-label">Personal moving-image archive · Est. {new Date().getFullYear()}</p>
           {/* Masthead sets in two beats: roman first, then the italic. */}
           <h1 className="mt-3 max-w-[14ch] font-display text-[clamp(48px,7vw,92px)] leading-[0.95] tracking-tight">
-            <span className="animate-rise inline-block [animation-delay:60ms]">The Standing</span>{' '}
-            <span className="animate-rise inline-block italic text-[var(--primary)] [animation-delay:180ms]">
-              Collection
-            </span>
+            <MastheadName name={settings.archiveName} />
           </h1>
         </div>
         <div className="mt-8 grid grid-cols-2 gap-y-8 sm:grid-cols-3 lg:grid-cols-5">
@@ -140,7 +139,7 @@ export default function Home({ onOpen }: { onOpen: (t: MediaType, id: number, se
                       {a.entry.title}
                     </span>
                     <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground">
-                      {formatDayMonth(a.at)}
+                      {settings.dateStyle === 'relative' ? formatRelativeDay(a.at) : formatDayMonth(a.at)}
                     </span>
                   </button>
                 </li>
@@ -233,5 +232,29 @@ export default function Home({ onOpen }: { onOpen: (t: MediaType, id: number, se
         </p>
       )}
     </div>
+  )
+}
+
+/** Archive masthead: leading words set roman, the closing word italic in the
+ *  house accent — the two-beat entrance is preserved for custom names. */
+function MastheadName({ name }: { name: string }) {
+  const words = name.trim().split(/\s+/).filter(Boolean)
+  if (words.length === 0) return null
+  if (words.length === 1) {
+    return (
+      <span className="animate-rise inline-block italic text-[var(--primary)] [animation-delay:180ms]">
+        {words[0]}
+      </span>
+    )
+  }
+  const head = words.slice(0, -1).join(' ')
+  const tail = words[words.length - 1]
+  return (
+    <>
+      <span className="animate-rise inline-block [animation-delay:60ms]">{head}</span>{' '}
+      <span className="animate-rise inline-block italic text-[var(--primary)] [animation-delay:180ms]">
+        {tail}
+      </span>
+    </>
   )
 }
