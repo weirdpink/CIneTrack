@@ -2,11 +2,11 @@ import { useCallback, useSyncExternalStore } from 'react'
 
 export type ThemeId = 'paper' | 'halide' | 'velvet' | 'blueprint'
 
-export const THEMES: { id: ThemeId; name: string; note: string; swatch: [string, string, string] }[] = [
-  { id: 'paper', name: 'Paper', note: 'True white stock, oxblood ink', swatch: ['#ffffff', '#14130f', '#7a2318'] },
-  { id: 'halide', name: 'Halide', note: 'Cold darkroom grey, silver-blue', swatch: ['#0f1417', '#e6edf1', '#6fa8c4'] },
-  { id: 'velvet', name: 'Velvet', note: 'Cinema velvet, curtain-red house', swatch: ['#100e0d', '#f2ede1', '#b3402e'] },
-  { id: 'blueprint', name: 'Blueprint', note: 'Cool slate, technical ink', swatch: ['#eef1f4', '#131a21', '#1f5673'] },
+export const THEMES: { id: ThemeId; name: string; note: string; tone: 'light' | 'dark'; swatch: [string, string, string] }[] = [
+  { id: 'paper', name: 'Paper', note: 'True white stock, oxblood ink', tone: 'light', swatch: ['#ffffff', '#14130f', '#7a2318'] },
+  { id: 'blueprint', name: 'Blueprint', note: 'Cool slate, technical ink', tone: 'light', swatch: ['#eef1f4', '#131a21', '#1f5673'] },
+  { id: 'halide', name: 'Halide', note: 'Cold darkroom grey, silver-blue', tone: 'dark', swatch: ['#0f1417', '#e6edf1', '#6fa8c4'] },
+  { id: 'velvet', name: 'Velvet', note: 'Cinema velvet, curtain-red house', tone: 'dark', swatch: ['#100e0d', '#f2ede1', '#b3402e'] },
 ]
 
 export type Settings = {

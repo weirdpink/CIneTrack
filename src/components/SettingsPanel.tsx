@@ -108,31 +108,47 @@ export default function SettingsPanel({ open, onClose }: { open: boolean; onClos
 
         <div className="divide-y divide-border">
           <Group index="01" title="Theme" note="Ground and ink for the whole archive.">
-            <div className="grid gap-2">
-              {THEMES.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => set('theme', t.id)}
-                  className={`press flex items-center gap-3 border px-3 py-2.5 text-left ${
-                    settings.theme === t.id
-                      ? 'border-[var(--primary)] bg-card'
-                      : 'border-border hover:border-[var(--foreground)]'
-                  }`}
-                >
-                  <span className="flex shrink-0 border border-border">
-                    {t.swatch.map((c) => (
-                      <span key={c} className="h-7 w-4" style={{ background: c }} />
-                    ))}
+            <div className="grid grid-cols-4 gap-3">
+              {THEMES.map((t) => {
+                const active = settings.theme === t.id
+                const [ground, ink, accent] = t.swatch
+                return (
+                  <span key={t.id} className="min-w-0">
+                    <button
+                      onClick={() => set('theme', t.id)}
+                      title={`${t.name} — ${t.note}`}
+                      aria-label={`${t.name} theme`}
+                      aria-pressed={active}
+                      className="press flex aspect-square w-full items-center justify-center overflow-hidden border transition-[filter] duration-200 hover:brightness-[0.96]"
+                      style={{
+                        background: ground,
+                        borderColor: active ? accent : `${ink}24`,
+                        boxShadow: active ? `inset 0 0 0 1px ${accent}` : undefined,
+                      }}
+                    >
+                      <span aria-hidden className="flex">
+                        <span className="block h-6 w-6" style={{ background: ink }} />
+                        <span aria-hidden className="block h-6 w-6" style={{ background: accent }} />
+                      </span>
+                    </button>
+                    <span className="mt-2 flex items-center justify-center gap-1">
+                      <span
+                        className={`truncate font-mono text-[10px] uppercase tracking-[0.14em] ${
+                          active ? '' : 'text-muted-foreground'
+                        }`}
+                        style={active ? { color: accent } : undefined}
+                      >
+                        {t.name}
+                      </span>
+                      {active && (
+                        <span aria-hidden className="font-mono text-[10px]" style={{ color: accent }}>
+                          ✓
+                        </span>
+                      )}
+                    </span>
                   </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-display text-[19px] leading-tight">{t.name}</span>
-                    <span className="rule-label">{t.note}</span>
-                  </span>
-                  {settings.theme === t.id && (
-                    <span className="animate-tick font-mono text-[11px] text-[var(--primary)]">✓</span>
-                  )}
-                </button>
-              ))}
+                )
+              })}
             </div>
           </Group>
 
@@ -217,7 +233,7 @@ export default function SettingsPanel({ open, onClose }: { open: boolean; onClos
 
             <div className="pt-2">
               <div className="rule-label mb-2 text-[10px]">Backup &amp; Portability</div>
-              <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={exportLibrary}
