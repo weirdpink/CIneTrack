@@ -237,7 +237,7 @@ function Footer({
     <footer className="border-t border-border bg-card">
       <div className="grid w-full gap-10 px-6 py-12 lg:grid-cols-[1.4fr_1fr_1fr] lg:px-10 xl:px-12">
         <div>
-          <Logo size={24} />
+          <Logo size={24} markSize={40} />
           <p className="mt-4 max-w-[36ch] text-[13px] leading-relaxed text-muted-foreground">
             A personal moving-image archive for the films and series you watch — catalogued, tracked, and stored in
             your local SQLite database.
