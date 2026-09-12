@@ -542,6 +542,8 @@ export function SearchInput({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        const target = e.target instanceof HTMLElement ? e.target : null
+        if (target?.closest('[role="dialog"]')) return
         e.preventDefault()
         inputRef.current?.focus()
         inputRef.current?.select()
@@ -589,6 +591,7 @@ export function SearchInput({
       />
       {value ? (
         <button
+          type="button"
           onClick={() => {
             onChange('')
             inputRef.current?.focus()
@@ -600,7 +603,7 @@ export function SearchInput({
         </button>
       ) : (
         <span className="hidden select-none font-sans text-[10px] tracking-[0.08em] text-muted-foreground/40 sm:block" aria-hidden>
-          ⌘K
+          {typeof navigator !== 'undefined' && /Mac|iPhone|iPad|Macintosh/.test(navigator.userAgent ?? '') ? '⌘K' : 'Ctrl K'}
         </span>
       )}
     </div>

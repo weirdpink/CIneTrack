@@ -53,11 +53,61 @@ export type TitleDetail = TmdbTitle & {
 }
 
 const MAX_CACHE_ENTRIES = 200
+const MAX_CACHE_BYTES = 16 * 1024 * 1024
 const CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes for client, server has 24h
-type CacheEntry = { promise: Promise<unknown>; expires: number }
+type CacheEntry = { promise: Promise<unknown>; expires: number; bytes: number }
 const clientCache = new Map<string, CacheEntry>()
+let clientCacheBytes = 0
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 type RequestOptions = { signal?: AbortSignal }
+
+function asObject(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('TMDb returned an invalid response')
+  return value as Record<string, unknown>
+}
+
+function safeImagePath(value: unknown): string | null {
+  return typeof value === 'string' && /^\/[A-Za-z0-9/_\-.]+$/.test(value) && !value.includes('..') ? value : null
+}
+
+function normalizeTitle(value: unknown): TmdbTitle | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const raw = value as Record<string, unknown>
+  const id = raw.id
+  if (!Number.isSafeInteger(id) || (id as number) <= 0) return null
+  const mediaType = raw.media_type === 'movie' || raw.media_type === 'tv' ? raw.media_type : undefined
+  const title = typeof raw.title === 'string' ? raw.title.slice(0, 500) : undefined
+  const name = typeof raw.name === 'string' ? raw.name.slice(0, 500) : undefined
+  const overview = typeof raw.overview === 'string' ? raw.overview.slice(0, 10000) : ''
+  const voteAverage = typeof raw.vote_average === 'number' && Number.isFinite(raw.vote_average) ? raw.vote_average : 0
+  const result: TmdbTitle = {
+    id: id as number,
+    media_type: mediaType,
+    title,
+    name,
+    poster_path: safeImagePath(raw.poster_path),
+    backdrop_path: safeImagePath(raw.backdrop_path),
+    overview,
+    vote_average: voteAverage,
+  }
+  if (typeof raw.release_date === 'string') result.release_date = raw.release_date.slice(0, 20)
+  if (typeof raw.first_air_date === 'string') result.first_air_date = raw.first_air_date.slice(0, 20)
+  if (Array.isArray(raw.genre_ids)) result.genre_ids = raw.genre_ids.filter((x): x is number => Number.isSafeInteger(x)).slice(0, 100)
+  return result
+}
+
+function normalizePage(value: unknown): Page {
+  const raw = asObject(value)
+  if (!Array.isArray(raw.results)) throw new Error('TMDb returned an invalid results list')
+  const page = typeof raw.page === 'number' && Number.isSafeInteger(raw.page) ? raw.page : 1
+  const totalPages = typeof raw.total_pages === 'number' && Number.isSafeInteger(raw.total_pages) ? raw.total_pages : page
+  return {
+    ...raw,
+    page,
+    total_pages: Math.max(1, Math.min(1000, totalPages)),
+    results: raw.results.map(normalizeTitle).filter((x): x is TmdbTitle => x !== null).slice(0, 100),
+  }
+}
 
 async function readResponseText(response: Response): Promise<string> {
   if (!response.body) {
@@ -91,13 +141,14 @@ async function readResponseText(response: Response): Promise<string> {
 /** Test-only: drop the client cache so tests never share inflight responses. */
 export function __clearTmdbCache() {
   clientCache.clear()
+  clientCacheBytes = 0
 }
 
 function getCache(url: string): Promise<unknown> | undefined {
   const e = clientCache.get(url)
   if (!e) return undefined
   if (e.expires < Date.now()) {
-    clientCache.delete(url)
+    deleteCache(url)
     return undefined
   }
   // Promote on hit so hot entries survive eviction.
@@ -106,17 +157,40 @@ function getCache(url: string): Promise<unknown> | undefined {
   return e.promise
 }
 
+function deleteCache(url: string) {
+  const entry = clientCache.get(url)
+  if (!entry) return
+  clientCache.delete(url)
+  clientCacheBytes = Math.max(0, clientCacheBytes - entry.bytes)
+}
+
 function setCache(url: string, promise: Promise<unknown>) {
   // Sweep expired entries first so dead weight never evicts live ones.
   const now = Date.now()
   for (const [k, v] of clientCache) {
-    if (v.expires < now) clientCache.delete(k)
+    if (v.expires < now) deleteCache(k)
   }
-  if (clientCache.size >= MAX_CACHE_ENTRIES) {
-    const first = clientCache.keys().next().value as string | undefined
-    if (first) clientCache.delete(first)
-  }
-  clientCache.set(url, { promise, expires: Date.now() + CACHE_TTL_MS })
+  deleteCache(url)
+  const entry: CacheEntry = { promise, expires: Date.now() + CACHE_TTL_MS, bytes: 0 }
+  clientCache.set(url, entry)
+  void promise.then(
+    (value) => {
+      if (clientCache.get(url) !== entry) return
+      try {
+        entry.bytes = new TextEncoder().encode(JSON.stringify(value)).byteLength
+        clientCacheBytes += entry.bytes
+      } catch {
+        deleteCache(url)
+        return
+      }
+      while (clientCache.size > MAX_CACHE_ENTRIES || clientCacheBytes > MAX_CACHE_BYTES) {
+        const first = clientCache.keys().next().value as string | undefined
+        if (!first) break
+        deleteCache(first)
+      }
+    },
+    () => deleteCache(url),
+  )
 }
 
 /** Allowlisted UI locale for TMDb metadata; unknown values fall back to en-US. */
@@ -206,11 +280,13 @@ export async function tmdb<T>(  path: string,
 
         const ct = res.headers.get('content-type') || ''
         if (!ct.includes('application/json')) throw new Error(`Unexpected TMDb response: ${text.slice(0, 200)}`)
+        let parsed: unknown
         try {
-          return JSON.parse(text) as T
+          parsed = JSON.parse(text)
         } catch {
           throw new Error('TMDb returned malformed JSON')
         }
+        return asObject(parsed) as T
       } catch (e) {
         clearTimeout(timeout)
         const err = e as Error
@@ -224,7 +300,7 @@ export async function tmdb<T>(  path: string,
   })()
 
   const handled = promise.catch((err) => {
-    clientCache.delete(url)
+    deleteCache(url)
     throw err
   })
 
@@ -259,21 +335,24 @@ export type Page = { results: TmdbTitle[]; page: number; total_pages: number }
 export const searchMulti = (query: string, page = 1, opts?: RequestOptions) => {
   const q = query.trim().slice(0, 100)
   if (!q) return Promise.resolve({ results: [], page: 1, total_pages: 1 } as Page)
-  return tmdb<Page>('/search/multi', { query: q, include_adult: String(currentSettings().includeAdult), page }, opts).then((r) => ({
-    ...r,
-    results: r.results.filter((x) => x.media_type === 'movie' || x.media_type === 'tv'),
-  }))
+  return tmdb<Page>('/search/multi', { query: q, include_adult: String(currentSettings().includeAdult), page }, opts).then((r) => {
+    const normalized = normalizePage(r)
+    return {
+      ...normalized,
+      results: normalized.results.filter((x) => x.media_type === 'movie' || x.media_type === 'tv'),
+    }
+  })
 }
 
 export const trending = (type: 'all' | MediaType, window: 'day' | 'week' = 'week', page = 1, opts?: RequestOptions) => {
   if (page < 1 || page > 1000) page = 1
-  return tmdb<Page>(`/trending/${type}/${window}`, { page }, opts)
+  return tmdb<Page>(`/trending/${type}/${window}`, { page }, opts).then(normalizePage)
 }
 
 export const recommendations = (type: MediaType, id: number, page = 1, opts?: RequestOptions) => {
   if (!Number.isInteger(id) || id <= 0 || id > 1e9) return Promise.reject(new Error('Invalid TMDb id'))
   if (page < 1 || page > 1000) page = 1
-  return tmdb<Page>(`/${type}/${id}/recommendations`, { page }, opts)
+  return tmdb<Page>(`/${type}/${id}/recommendations`, { page }, opts).then(normalizePage)
 }
 
 export const discover = (
@@ -286,7 +365,7 @@ export const discover = (
     'vote_count.gte': 50,
     include_adult: String(currentSettings().includeAdult),
     ...opts,
-  }, requestOpts)
+  }, requestOpts).then(normalizePage)
 export const details = (type: MediaType, id: number, opts?: { signal?: AbortSignal }) => {
   if (!Number.isInteger(id) || id <= 0 || id > 1e9) return Promise.reject(new Error('Invalid TMDb id'))
   return tmdb<TitleDetail>(`/${type}/${id}`, { append_to_response: 'credits,external_ids' }, opts)
@@ -298,7 +377,19 @@ export const season = (id: number, seasonNumber: number, opts?: { signal?: Abort
   return tmdb<{ episodes: Episode[]; name: string; overview: string }>(`/tv/${id}/season/${seasonNumber}`, {}, opts)
 }
 export const genreList = (type: MediaType, opts?: RequestOptions) =>
-  tmdb<{ genres: { id: number; name: string }[] }>(`/genre/${type}/list`, {}, opts).then((r) => r.genres)
+  tmdb<{ genres: { id: number; name: string }[] }>(`/genre/${type}/list`, {}, opts).then((r) => {
+    const raw = asObject(r)
+    if (!Array.isArray(raw.genres)) throw new Error('TMDb returned an invalid genre list')
+    return raw.genres
+      .map((genre) => {
+        if (!genre || typeof genre !== 'object' || Array.isArray(genre)) return null
+        const item = genre as Record<string, unknown>
+        return Number.isSafeInteger(item.id) && typeof item.name === 'string'
+          ? { id: item.id as number, name: item.name.slice(0, 200) }
+          : null
+      })
+      .filter((genre): genre is { id: number; name: string } => genre !== null)
+  })
 
 export type PersonDetail = {
   id: number

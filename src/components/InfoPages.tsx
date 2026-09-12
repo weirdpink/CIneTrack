@@ -57,10 +57,9 @@ function About() {
       </p>
       <H>Where your data lives</H>
       <p>
-        Everything you record is stored directly in an on-disk SQLite database file at <code>data/cinetrack.db</code> in
-        the project folder. There is no remote account or third-party server holding your library — your data travels
-        with the project wherever you copy or clone it. You can also export your collection as a JSON or SQLite (.db) file
-        at any time from Settings.
+        Everything you record is stored locally in your browser and mirrored to the on-disk SQLite database at <code>data/cinetrack.db</code>
+        when the local server is available. There is no remote account or third-party server holding your library — your data travels
+        with the project wherever you copy or clone it. You can also export your collection as a JSON or SQLite (.db) file at any time from Settings.
       </p>
     </>
   )

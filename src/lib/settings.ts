@@ -140,6 +140,10 @@ function read(): Settings {
     const raw = localStorage.getItem(STORAGE)
     if (!raw) return { ...DEFAULTS }
     if (raw.length > 100000) {
+      try {
+        localStorage.setItem(STORAGE_CORRUPT, raw.slice(0, 5000))
+        localStorage.removeItem(STORAGE)
+      } catch {}
       console.warn('[settings] blob too large, resetting')
       return { ...DEFAULTS }
     }
@@ -185,6 +189,8 @@ function notify() {
 export function applyTheme(theme: ThemeId) {
   if (typeof document === 'undefined') return
   document.documentElement.dataset.theme = theme
+  const themeColor = THEMES.find((item) => item.id === theme)?.swatch[0]
+  if (themeColor) document.querySelector('meta[name="theme-color"]')?.setAttribute('content', themeColor)
 }
 try {
   applyTheme(cache.theme)
@@ -288,7 +294,10 @@ async function hydrateFromSqlite() {
     // offline
   } finally {
     hydrating = false
-    if (hasMutatedDuringHydration) setTimeout(() => mirrorToSqlite(cache), 200)
+    const shouldMirror = hasMutatedDuringHydration
+    hasMutatedDuringHydration = false
+    dirtyKeys.clear()
+    if (shouldMirror) setTimeout(() => mirrorToSqlite(cache), 200)
   }
 }
 void hydrateFromSqlite()

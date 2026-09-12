@@ -30,6 +30,7 @@ export type Entry = {
 
 const STORAGE = 'archive.library.v1'
 const STORAGE_CORRUPT = 'archive.library.v1.corrupt'
+const MAX_STORAGE_BYTES = 10 * 1024 * 1024
 /** Server truncates rewatches at 500 — mirror that client-side. */
 const MAX_REWATCHES = 500
 
@@ -123,7 +124,13 @@ function sanitizeMap(raw: unknown): Record<string, Entry> {
       continue
     }
     try {
-      out[k] = normalizeEntry(v as Entry)
+      const normalized = normalizeEntry(v as Entry)
+      const [mediaType, rawId] = k.split(':')
+      if (normalized.mediaType !== mediaType || normalized.id !== Number(rawId)) {
+        dropped++
+        continue
+      }
+      out[k] = normalized
     } catch {
       dropped++
     }
@@ -138,6 +145,12 @@ function read(): Record<string, Entry> {
   try {
     const raw = localStorage.getItem(STORAGE)
     if (!raw) return {}
+    if (raw.length > MAX_STORAGE_BYTES) {
+      localStorage.setItem(STORAGE_CORRUPT, raw.slice(0, 20000))
+      localStorage.removeItem(STORAGE)
+      console.warn('[library] local data exceeded the storage limit, reset safely')
+      return {}
+    }
     localSnapshotPresent = true
     return sanitizeMap(JSON.parse(raw))
   } catch {
@@ -244,7 +257,7 @@ async function hydrateFromSqlite() {
       return
     }
     const map = sanitizeMap(await res.json().catch(() => ({})))
-    if (Object.keys(map).length > 0 && !localSnapshotPresent) {
+    if (Object.keys(map).length > 0 && !localSnapshotPresent && !mutatedDuringHydration) {
       commit(map)
     } else if (localSnapshotPresent || Object.keys(cache).length > 0) {
       // localStorage is authoritative. A present empty snapshot is meaningful:

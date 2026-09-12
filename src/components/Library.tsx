@@ -234,6 +234,7 @@ function FilterBar({
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
+        aria-controls="library-filter-popover"
         aria-label={`Filter shelf${activeCount ? `, ${activeCount} active` : ''}`}
         className={`press relative flex h-9 items-center justify-center border px-4 font-sans text-[11px] font-medium uppercase tracking-[0.14em] transition-colors duration-200 ${
           open || active
@@ -250,7 +251,7 @@ function FilterBar({
       </button>
 
       {open && (
-        <div className="quiet-scroll animate-[ct-tick_180ms_var(--ease-sheet)_both] absolute right-0 top-[calc(100%+6px)] z-50 max-h-[min(70vh,520px)] w-[300px] origin-top-right overflow-y-auto border border-border bg-background p-4 shadow-[0_12px_40px_rgba(0,0,0,0.22)]">
+        <div id="library-filter-popover" role="dialog" aria-label="Filter library" className="quiet-scroll animate-[ct-tick_180ms_var(--ease-sheet)_both] absolute right-0 top-[calc(100%+6px)] z-50 max-h-[min(70vh,520px)] w-[300px] origin-top-right overflow-y-auto border border-border bg-background p-4 shadow-[0_12px_40px_rgba(0,0,0,0.22)]">
           <div className="rule-label mb-3 border-b border-border pb-2">
             {count} shown · sorted by {sortLabel}
           </div>
@@ -268,6 +269,7 @@ function FilterBar({
                   key={f}
                   type="button"
                   onClick={() => onFilter(f)}
+                  aria-pressed={isActive}
                   className={`press shrink-0 whitespace-nowrap border px-3 py-1.5 font-sans text-[11px] font-medium uppercase tracking-[0.14em] ${isActive ? activeStyle : inactiveStyle}`}
                 >
                   {f}

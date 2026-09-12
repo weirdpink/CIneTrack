@@ -4,15 +4,29 @@ import tailwindcss from '@tailwindcss/vite'
 import path from 'node:path'
 import fs from 'node:fs'
 
+const PORT = Number(process.env.PORT) > 0 && Number(process.env.PORT) < 65536 ? Number(process.env.PORT) : 8443
+const COMMON_SECURITY_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Cross-Origin-Opener-Policy': 'same-origin',
+  'Cross-Origin-Resource-Policy': 'same-origin',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+}
+const DEVELOPMENT_CSP =
+  "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://image.tmdb.org data:; connect-src 'self' https://api.themoviedb.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; frame-src 'none'"
+const PRODUCTION_CSP =
+  "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://image.tmdb.org; connect-src 'self' https://api.themoviedb.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; frame-src 'none'"
+
 // Vite config — https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react(), tailwindcss(), cinetrackSqlitePersistence()],
+  plugins: [react(), tailwindcss(), cspIndexPlugin(), cinetrackSqlitePersistence()],
   resolve: {
     dedupe: ['react', 'react-dom'],
   },
   server: {
     host: '127.0.0.1',
-    port: Number(process.env.PORT) > 0 && Number(process.env.PORT) < 65536 ? Number(process.env.PORT) : 8443,
+    port: PORT,
     strictPort: true,
     watch: {
       ignored: ['**/data/**', '**/*.db', '**/API.txt'],
@@ -25,31 +39,13 @@ export default defineConfig({
         path.resolve(import.meta.dirname, './node_modules/sql.js'),
       ],
     },
-    headers: {
-      'X-Content-Type-Options': 'nosniff',
-      'X-Frame-Options': 'DENY',
-      'Referrer-Policy': 'strict-origin-when-cross-origin',
-      'Cross-Origin-Opener-Policy': 'same-origin',
-      'Cross-Origin-Resource-Policy': 'same-origin',
-      'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
-      'Content-Security-Policy':
-        "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://image.tmdb.org data:; connect-src 'self' https://api.themoviedb.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; frame-src 'none'",
-    },
+    headers: { ...COMMON_SECURITY_HEADERS, 'Content-Security-Policy': DEVELOPMENT_CSP },
     cors: false,
   },
   preview: {
     host: '127.0.0.1',
-    port: Number(process.env.PORT) > 0 && Number(process.env.PORT) < 65536 ? Number(process.env.PORT) : 8443,
-    headers: {
-      'X-Content-Type-Options': 'nosniff',
-      'X-Frame-Options': 'DENY',
-      'Referrer-Policy': 'strict-origin-when-cross-origin',
-      'Cross-Origin-Opener-Policy': 'same-origin',
-      'Cross-Origin-Resource-Policy': 'same-origin',
-      'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
-      'Content-Security-Policy':
-        "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://image.tmdb.org data:; connect-src 'self' https://api.themoviedb.org; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; frame-src 'none'",
-    },
+    port: PORT,
+    headers: { ...COMMON_SECURITY_HEADERS, 'Content-Security-Policy': PRODUCTION_CSP },
   },
   build: {
     chunkSizeWarningLimit: 500,
@@ -69,6 +65,17 @@ export default defineConfig({
   },
 })
 
+function cspIndexPlugin(): Plugin {
+  return {
+    name: 'cinetrack-csp-mode',
+    transformIndexHtml(html, ctx) {
+      // Vite injects dev-only inline refresh code. Keep the source/build HTML
+      // strict while allowing the development server's own CSP to do its job.
+      return ctx.server ? html.replace(PRODUCTION_CSP, DEVELOPMENT_CSP) : html
+    },
+  }
+}
+
 /**
  * Portable SQLite persistence — single source of truth at data/cinetrack.db
  * Works in both dev (`vite dev`) and preview (`vite preview`), so the
@@ -85,6 +92,7 @@ function cinetrackSqlitePersistence(): Plugin {
   const MAX_TIMESTAMP = 8_640_000_000_000_000
   const CACHE_TTL_MS = 1000 * 60 * 60 * 24
   const MAX_CACHE_ENTRIES = 200
+  const MAX_CACHE_BYTES = 16 * 1024 * 1024
   const ALLOWED_TMDB_PREFIXES = ['/search/', '/discover/', '/trending/', '/movie/', '/tv/', '/genre/', '/person/']
   const ALLOWED_TMDB_QUERY_KEYS = new Set([
     'language',
@@ -275,6 +283,40 @@ function cinetrackSqlitePersistence(): Plugin {
         value TEXT NOT NULL
       );
     `)
+    // Keep older portable databases usable. CREATE TABLE IF NOT EXISTS does
+    // not add columns to an existing file, so migrate the small fixed schema
+    // before any handler prepares an INSERT.
+    const columns = (table: string) => {
+      const rows = db.exec(`PRAGMA table_info(${table})`)[0]?.values ?? []
+      return new Set(rows.map((row: unknown[]) => String(row[1])))
+    }
+    const libraryColumns = columns('library')
+    const libraryAdditions: [string, string][] = [
+      ['media_type', 'TEXT'],
+      ['id', 'INTEGER'],
+      ['title', 'TEXT'],
+      ['year', 'TEXT'],
+      ['poster', 'TEXT'],
+      ['backdrop', 'TEXT'],
+      ['rating', 'REAL'],
+      ['status', 'TEXT'],
+      ['favorite', 'INTEGER DEFAULT 0'],
+      ['added_at', 'INTEGER'],
+      ['watched_at', 'INTEGER'],
+      ['runtime', 'INTEGER'],
+      ['total_episodes', 'INTEGER'],
+      ['episodes', 'TEXT'],
+      ['rewatches', 'TEXT'],
+      ['note', 'TEXT'],
+      ['json', 'TEXT'],
+    ]
+    for (const [name, definition] of libraryAdditions) {
+      if (!libraryColumns.has(name)) db.run(`ALTER TABLE library ADD COLUMN ${name} ${definition}`)
+    }
+    const settingsColumns = columns('settings')
+    if (!settingsColumns.has('key')) db.run('ALTER TABLE settings ADD COLUMN key TEXT')
+    if (!settingsColumns.has('value')) db.run('ALTER TABLE settings ADD COLUMN value TEXT')
+    db.run('PRAGMA user_version = 1')
     return db
   }
 
@@ -282,19 +324,25 @@ function cinetrackSqlitePersistence(): Plugin {
   function persist(db: any) {
     fs.mkdirSync(path.dirname(DB_PATH), { recursive: true })
     const tmp = `${DB_PATH}.tmp.${Date.now()}.${Math.random().toString(36).slice(2)}`
-    const data = Buffer.from(db.export())
-    fs.writeFileSync(tmp, data, { mode: 0o600 })
+    let renamed = false
     try {
-      const fd = fs.openSync(tmp, 'r')
-      fs.fsyncSync(fd)
-      fs.closeSync(fd)
-    } catch {}
-    // ensure correct perms before rename
-    try {
-      fs.chmodSync(tmp, 0o600)
-    } catch {}
-    // atomic replace + fsync directory for durability
-    fs.renameSync(tmp, DB_PATH)
+      const data = Buffer.from(db.export())
+      fs.writeFileSync(tmp, data, { mode: 0o600 })
+      const fd = fs.openSync(tmp, 'r+')
+      try {
+        fs.fchmodSync(fd, 0o600)
+        fs.fsyncSync(fd)
+      } finally {
+        fs.closeSync(fd)
+      }
+      // atomic replace + fsync directory for durability
+      fs.renameSync(tmp, DB_PATH)
+      renamed = true
+    } finally {
+      if (!renamed) {
+        try { if (fs.existsSync(tmp)) fs.unlinkSync(tmp) } catch {}
+      }
+    }
     try {
       const dirFd = fs.openSync(path.dirname(DB_PATH), 'r')
       try { fs.fsyncSync(dirFd) } catch {}
@@ -306,7 +354,7 @@ function cinetrackSqlitePersistence(): Plugin {
       try {
         const dir = path.dirname(DB_PATH)
         for (const f of fs.readdirSync(dir)) {
-          if (!f.startsWith('cinetrack.db.tmp.')) continue
+          if (!f.startsWith('cinetrack.db.tmp.') && !f.startsWith('cinetrack.db.export.tmp.')) continue
           const full = path.join(dir, f)
           try {
             const st = fs.statSync(full)
@@ -318,6 +366,11 @@ function cinetrackSqlitePersistence(): Plugin {
   }
 
   async function readBodyWithLimit(req: import('node:http').IncomingMessage, limit: number): Promise<Buffer> {
+    const declared = Number(req.headers['content-length'] ?? 0)
+    if (Number.isFinite(declared) && declared > limit) {
+      req.destroy()
+      throw new Error('PAYLOAD_TOO_LARGE')
+    }
     const chunks: Buffer[] = []
     let size = 0
     const timeout = setTimeout(() => {
@@ -368,16 +421,18 @@ function cinetrackSqlitePersistence(): Plugin {
     }
   }
 
-  // Simple LRU helpers for tmdbCache — fix FIFO and add sweeping
+  // LRU helpers for tmdbCache with both count and byte bounds.
   function evictIfNeeded(cache: Map<string, any>) {
-    if (cache.size > MAX_CACHE_ENTRIES) {
+    const now = Date.now()
+    for (const [k, v] of cache) if (v.expires < now) cache.delete(k)
+    let bytes = 0
+    for (const v of cache.values()) bytes += Buffer.byteLength(v.body)
+    while (cache.size > MAX_CACHE_ENTRIES || bytes > MAX_CACHE_BYTES) {
       const first = cache.keys().next().value as string | undefined
-      if (first) cache.delete(first)
-    }
-    // Sweep expired on every 50 inserts and also when over limit
-    if (cache.size % 50 === 0 || cache.size > MAX_CACHE_ENTRIES) {
-      const now = Date.now()
-      for (const [k, v] of cache) if (v.expires < now) cache.delete(k)
+      if (!first) break
+      const value = cache.get(first)
+      cache.delete(first)
+      bytes -= value ? Buffer.byteLength(value.body) : 0
     }
   }
 
@@ -441,6 +496,13 @@ function cinetrackSqlitePersistence(): Plugin {
         let decodedPath = pathname
         try { decodedPath = decodeURIComponent(pathname) } catch { decodedPath = pathname }
         const lowerPath = decodedPath.toLowerCase()
+        const remoteAddress = (req.socket as unknown as { remoteAddress?: string })?.remoteAddress ?? ''
+        const isLoopback = remoteAddress === '::1' || remoteAddress === '127.0.0.1' || remoteAddress === '0.0.0.0' || remoteAddress.startsWith('::ffff:127.')
+        if (!isLoopback && (pathname.startsWith('/api/tmdb') || pathname.startsWith('/__data/'))) {
+          res.statusCode = 403
+          res.end()
+          return
+        }
         if (lowerPath === '/api.txt' || lowerPath === '/vite.config.ts' || lowerPath.startsWith('/data/') || lowerPath === '/data') {
           res.statusCode = 404
           res.end()
@@ -595,7 +657,13 @@ function cinetrackSqlitePersistence(): Plugin {
 
             const status = upstreamRes.status
             const rawContentType = upstreamRes.headers.get('content-type') || 'application/json'
-            const contentType = rawContentType.includes('application/json') ? 'application/json' : 'application/json'
+            if (!rawContentType.toLowerCase().includes('application/json')) {
+              res.statusCode = 502
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ error: 'TMDb returned an unexpected content type' }))
+              return
+            }
+            const contentType = 'application/json'
             // Bound upstream bodies to 1MB by bytes (not UTF-16 length), with a
             // content-length pre-check — larger payloads are rejected, never
             // truncated-and-cached (a truncated body would poison the cache).
@@ -633,24 +701,35 @@ function cinetrackSqlitePersistence(): Plugin {
           try {
             if (req.method === 'GET') {
               const db = await openDb()
-              const out: Record<string, unknown> = {}
-              const stmt = db.prepare('SELECT key, json FROM library')
-              while (stmt.step()) {
-                const [key, json] = stmt.get() as [string, string]
+              try {
+                const out: Record<string, unknown> = {}
+                let responseBytes = 2
+                const stmt = db.prepare('SELECT key, json FROM library')
                 try {
-                  // Validate key shape to prevent prototype pollution
-                  if (!isSafeDbKey(key)) continue
-                  out[key] = JSON.parse(json)
-                } catch {
-                  /* skip malformed */
+                  while (stmt.step()) {
+                    const [key, json] = stmt.get() as [string, string]
+                    try {
+                      // Validate key shape to prevent prototype pollution
+                      if (!isSafeDbKey(key)) continue
+                      const parsed = JSON.parse(json)
+                      const encoded = JSON.stringify(parsed)
+                      if (encoded.length > MAX_BODY_BYTES || responseBytes + encoded.length > MAX_BODY_BYTES) continue
+                      out[key] = parsed
+                      responseBytes += encoded.length + key.length + 4
+                    } catch {
+                      /* skip malformed */
+                    }
+                  }
+                } finally {
+                  stmt.free()
                 }
+                res.setHeader('Content-Type', 'application/json')
+                res.setHeader('Cache-Control', 'no-store')
+                res.end(JSON.stringify(out))
+                return
+              } finally {
+                db.close()
               }
-              stmt.free()
-              db.close()
-              res.setHeader('Content-Type', 'application/json')
-              res.setHeader('Cache-Control', 'no-store')
-              res.end(JSON.stringify(out))
-              return
             }
 
             if (req.method === 'POST') {
@@ -697,10 +776,12 @@ function cinetrackSqlitePersistence(): Plugin {
                     const id = Number(rawId)
                     if (val.mediaType !== mediaType || val.id !== id) continue
                     const episodes: Record<string, number> = {}
+                    let acceptedEpisodes = 0
                     if (val.episodes && typeof val.episodes === 'object' && !Array.isArray(val.episodes)) {
                       for (const [episodeKey, stamp] of Object.entries(val.episodes as Record<string, unknown>)) {
-                        if (Object.keys(episodes).length >= 20000) break
+                        if (acceptedEpisodes >= 20000) break
                         if (/^\d+-\d+$/.test(episodeKey) && isValidTimestamp(stamp)) episodes[episodeKey] = stamp
+                        if (Object.prototype.hasOwnProperty.call(episodes, episodeKey)) acceptedEpisodes++
                       }
                     }
                     const rewatches = Array.isArray(val.rewatches) ? val.rewatches.filter(isValidTimestamp).slice(-500) : []
@@ -786,23 +867,37 @@ function cinetrackSqlitePersistence(): Plugin {
           try {
             if (req.method === 'GET') {
               const db = await openDb()
-              const out: Record<string, any> = {}
-              const stmt = db.prepare('SELECT key, value FROM settings')
-              while (stmt.step()) {
-                const [k, v] = stmt.get() as [string, string]
+              try {
+                const out: Record<string, any> = {}
+                let responseBytes = 2
+                const stmt = db.prepare('SELECT key, value FROM settings')
                 try {
-                  if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue
-                  out[k] = JSON.parse(v)
-                } catch {
-                  out[k] = v
+                  while (stmt.step()) {
+                    const [k, v] = stmt.get() as [string, string]
+                    try {
+                      if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue
+                      const parsed = JSON.parse(v)
+                      const encoded = JSON.stringify(parsed)
+                      if (encoded.length > MAX_BODY_BYTES_SETTINGS || responseBytes + encoded.length > MAX_BODY_BYTES_SETTINGS) continue
+                      out[k] = parsed
+                      responseBytes += encoded.length + k.length + 4
+                    } catch {
+                      if (responseBytes + v.length + k.length + 4 <= MAX_BODY_BYTES_SETTINGS) {
+                        out[k] = v
+                        responseBytes += v.length + k.length + 4
+                      }
+                    }
+                  }
+                } finally {
+                  stmt.free()
                 }
+                res.setHeader('Content-Type', 'application/json')
+                res.setHeader('Cache-Control', 'no-store')
+                res.end(JSON.stringify(out))
+                return
+              } finally {
+                db.close()
               }
-              stmt.free()
-              db.close()
-              res.setHeader('Content-Type', 'application/json')
-              res.setHeader('Cache-Control', 'no-store')
-              res.end(JSON.stringify(out))
-              return
             }
 
             if (req.method === 'POST') {
@@ -879,8 +974,13 @@ function cinetrackSqlitePersistence(): Plugin {
             // Copy to a uniquely-named tmp to avoid torn reads and concurrent-export races.
             const tmpExport = `${DB_PATH}.export.tmp.${Date.now()}.${Math.random().toString(36).slice(2)}`
             try {
+              const fd = fs.openSync(tmpExport, 'wx', 0o600)
+              fs.closeSync(fd)
               fs.copyFileSync(DB_PATH, tmpExport)
-            } catch {}
+              fs.chmodSync(tmpExport, 0o600)
+            } catch {
+              try { if (fs.existsSync(tmpExport)) fs.unlinkSync(tmpExport) } catch {}
+            }
             const stat = fs.statSync(fs.existsSync(tmpExport) ? tmpExport : DB_PATH)
             res.setHeader('Content-Type', 'application/vnd.sqlite3')
             res.setHeader('Content-Disposition', 'attachment; filename="cinetrack.db"')

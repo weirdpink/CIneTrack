@@ -34,8 +34,13 @@ export default function App() {
   const [info, setInfo] = useState<InfoSlug | null>(null)
   const [open, setOpen] = useState<{ type: MediaType; id: number; seed?: TmdbTitle } | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsMounted, setSettingsMounted] = useState(false)
   const { entries } = useLibrary()
   const { settings } = useSettings()
+
+  useEffect(() => {
+    if (settingsOpen) setSettingsMounted(true)
+  }, [settingsOpen])
 
   const goPage = useCallback((p: Page) => {
     setInfo(null)
@@ -63,6 +68,8 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!e.altKey || e.ctrlKey || e.metaKey) return
+      const focusedTarget = e.target instanceof HTMLElement ? e.target : null
+      if (focusedTarget?.closest('input, textarea, select, [contenteditable="true"], [role="dialog"]')) return
       if (e.code === 'Comma') {
         e.preventDefault()
         setSettingsOpen((v) => !v)
@@ -152,7 +159,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="w-full flex-1 px-6 pb-12 pt-6 lg:px-10 lg:pb-16 lg:pt-8 xl:px-12">
+      <main id="main-content" tabIndex={-1} className="w-full flex-1 px-6 pb-12 pt-6 outline-none lg:px-10 lg:pb-16 lg:pt-8 xl:px-12">
         <Suspense
           fallback={
             <div className="flex min-h-[40vh] items-center justify-center">
@@ -177,7 +184,7 @@ export default function App() {
       <Footer entries={entries.length} onInfo={setInfo} onSettings={() => setSettingsOpen(true)} />
 
       <Suspense fallback={null}>
-        <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+        {settingsMounted && <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />}
         {open && (
           <TitleDetail
             key={`${open.type}-${open.id}`}
@@ -211,7 +218,7 @@ function Footer({
             A personal moving-image archive for the films and series you watch — catalogued, tracked, and stored in
             your local SQLite database.
           </p>
-          <p className="rule-label mt-4">{entries} titles held · Stored in SQLite (data/cinetrack.db)</p>
+          <p className="rule-label mt-4">{entries} titles held · Stored locally in SQLite and browser storage</p>
         </div>
 
         <nav className="flex flex-col gap-2.5">

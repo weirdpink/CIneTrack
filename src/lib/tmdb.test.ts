@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { __clearTmdbCache, person, personCredits, tmdb } from './tmdb'
+import { __clearTmdbCache, person, personCredits, searchMulti, tmdb } from './tmdb'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -45,6 +45,19 @@ describe('tmdb shared requests', () => {
     await expect(tmdb('/tv/99992', {}, { signal: dead.signal })).rejects.toThrow('Request cancelled')
     // Shared fetch still ran to completion and is now cached.
     await expect(tmdb('/tv/99992', {})).resolves.toEqual({ id: 99992 })
+  })
+
+  it('rejects non-object upstream JSON and drops malformed result rows', async () => {
+    mockDelayedJson([])
+    await expect(tmdb('/tv/99993', {})).rejects.toThrow('invalid response')
+
+    __clearTmdbCache()
+    mockDelayedJson({
+      page: 1,
+      total_pages: 1,
+      results: [{ id: 0 }, { id: 10, media_type: 'movie', title: 'Valid' }],
+    })
+    await expect(searchMulti('valid')).resolves.toMatchObject({ results: [{ id: 10, title: 'Valid' }] })
   })
 })
 

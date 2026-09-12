@@ -35,6 +35,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           {toasts.map((t) => (
             <div
               key={t.id}
+              role={t.kind === 'error' ? 'alert' : 'status'}
+              aria-atomic="true"
               className={`pointer-events-auto min-w-[280px] max-w-[420px] border px-4 py-3 font-sans text-[13px] leading-relaxed shadow-lg ${
                 t.kind === 'error'
                   ? 'border-[var(--destructive)] bg-[var(--destructive)] text-[var(--destructive-foreground)]'

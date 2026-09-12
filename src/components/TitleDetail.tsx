@@ -18,6 +18,7 @@ import {
   toDateInput,
   todayInput,
   useLibrary,
+  watchedCount,
   type Entry,
   type Status,
 } from '../lib/library'
@@ -27,6 +28,27 @@ import { useToast } from './Toast'
 import CastDetail from './CastDetail'
 
 const STATUSES: Status[] = ['planned', 'watching', 'watched', 'dropped']
+const MAX_AUTO_EPISODES = 20000
+
+function markAllEpisodes(seasons: SeasonSummary[], at: number, seed: Record<string, number> = {}) {
+  const marked = { ...seed }
+  let count = Object.keys(marked).length
+  outer: for (const season of seasons) {
+    if (!Number.isInteger(season.season_number) || season.season_number <= 0) continue
+    const episodeCount = typeof season.episode_count === 'number' && Number.isSafeInteger(season.episode_count)
+      ? Math.min(10000, Math.max(0, season.episode_count))
+      : 0
+    for (let ep = 1; ep <= episodeCount; ep++) {
+      if (count >= MAX_AUTO_EPISODES) break outer
+      const key = epKey(season.season_number, ep)
+      if (marked[key] == null) {
+        marked[key] = at
+        count++
+      }
+    }
+  }
+  return marked
+}
 
 export default function TitleDetail({
   type,
@@ -121,6 +143,11 @@ export default function TitleDetail({
     const patch: Partial<Entry> = {}
     if (entry.runtime == null && runtime != null) patch.runtime = runtime
     if (entry.totalEpisodes == null && totalEpisodes != null) patch.totalEpisodes = totalEpisodes
+    if (type === 'tv' && entry.status === 'watched' && watchedCount(entry) === 0 && data.seasons) {
+      const at = entry.watchedAt ?? Date.now()
+      const episodes = markAllEpisodes(data.seasons, at)
+      if (Object.keys(episodes).length > 0) patch.episodes = episodes
+    }
     if (Object.keys(patch).length > 0) {
       upsert(type, id, patch)
     }
@@ -143,12 +170,6 @@ export default function TitleDetail({
     upsert(type, id, { runtime, totalEpisodes: type === 'tv' ? (data?.number_of_episodes ?? null) : null, ...patch }, source ?? undefined)
   }
 
-  const rawImdbId = data?.imdb_id || data?.external_ids?.imdb_id
-  const imdbId = rawImdbId && /^tt\d+$/.test(rawImdbId) ? rawImdbId : null
-  const imdbUrl = imdbId
-    ? `https://www.imdb.com/title/${imdbId}/`
-    : `https://www.imdb.com/find/?q=${encodeURIComponent(entry?.title || (source ? titleOf(source) : ''))}`
-
   const rawRuntime = entry?.runtime ?? (type === 'movie' ? (data?.runtime ?? null) : (data?.episode_run_time?.[0] ?? null))
   const formattedRuntime = rawRuntime ? formatRuntime(rawRuntime) : null
   const releaseRaw =
@@ -162,15 +183,7 @@ export default function TitleDetail({
     let episodesPatch: Record<string, number> | undefined
     let watchedAt: number | null | undefined
     if (type === 'tv' && s === 'watched' && data?.seasons) {
-      episodesPatch = { ...entry.episodes }
-      for (const season of data.seasons) {
-        // Only real seasons auto-complete — skip Specials / extras (season 0).
-        if (season.season_number <= 0) continue
-        for (let ep = 1; ep <= season.episode_count; ep++) {
-          const k = epKey(season.season_number, ep)
-          episodesPatch[k] = episodesPatch[k] ?? now
-        }
-      }
+      episodesPatch = markAllEpisodes(data.seasons, now, entry.episodes)
     }
     if (s === 'planned' && type === 'tv') {
       // Starting over — clear every logged episode.
@@ -185,14 +198,14 @@ export default function TitleDetail({
     toast(`Marked as ${STATUS_BADGE[s]?.label ?? s}`, 'info')
   }
 
-  const metaParts: { text: string; isImdb?: boolean }[] = source
+  const metaParts: { text: string; isScore?: boolean }[] = source
     ? [
         { text: releaseLabel ?? entry?.year ?? yearOf(source) ?? '—' },
         ...(type === 'movie'
           ? (formattedRuntime ? [{ text: formattedRuntime }] : [])
           : [{ text: `${data?.number_of_episodes ?? entry?.totalEpisodes ?? '—'} EPISODES` }]),
         ...(typeof source.vote_average === 'number' && source.vote_average > 0
-          ? [{ text: `IMDb ${source.vote_average.toFixed(1)}`, isImdb: true }]
+          ? [{ text: `TMDb ${source.vote_average.toFixed(1)}`, isScore: true }]
           : []),
       ]
     : []
@@ -289,13 +302,13 @@ export default function TitleDetail({
                   {metaParts.map((part, idx) => (
                     <span key={idx}>
                       {idx > 0 && <span className="mx-2 text-border">·</span>}
-                      {part.isImdb ? (
+                      {part.isScore ? (
                         <a
-                          href={imdbUrl}
+                          href={`https://www.themoviedb.org/${type}/${id}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="font-medium text-[var(--primary)] underline decoration-[var(--primary)]/40 underline-offset-[3px] transition-opacity hover:opacity-75"
-                          title="View on IMDb"
+                          title="View on TMDb"
                         >
                           {part.text}
                         </a>
@@ -921,6 +934,7 @@ function StatusModal({
                 className={`press flex h-9 w-full items-center justify-between border px-3 font-sans text-[11px] font-medium uppercase tracking-[0.14em] transition-all ${
                   active ? `${STATUS_STYLE[s]} shadow-xs` : STATUS_INACTIVE[s]
                 }`}
+                aria-pressed={active}
               >
                 <span className="flex items-center gap-2.5">
                   <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">{STATUS_BADGE[s].icon}</span>
@@ -1118,15 +1132,7 @@ function EditModal({
     if (type === 'tv' && seasons && draftStatus !== entry.status) {
       if (draftStatus === 'watched') {
         const at = draftWatchedAt ?? Date.now()
-        const marked: Record<string, number> = { ...entry.episodes }
-        for (const season of seasons) {
-          if (season.season_number <= 0) continue
-          for (let ep = 1; ep <= season.episode_count; ep++) {
-            const k = epKey(season.season_number, ep)
-            marked[k] = marked[k] ?? at
-          }
-        }
-        patch.episodes = marked
+        patch.episodes = markAllEpisodes(seasons, at, entry.episodes)
       } else if (draftStatus === 'planned') {
         patch.episodes = {}
       }

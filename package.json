@@ -9,7 +9,7 @@
     "start": "vite preview --host 127.0.0.1",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "audit": "npm audit --omit=dev",
+    "audit": "env -u npm_config_allow_scripts npm audit --omit=dev --ignore-scripts",
     "test": "vitest run --reporter=verbose",
     "test:watch": "vitest",
     "verify": "npm run typecheck && npm test && npm run build"

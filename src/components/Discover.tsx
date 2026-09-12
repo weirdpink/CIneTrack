@@ -147,6 +147,7 @@ function GenrePicker({
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
+        aria-controls="discover-genre-filter"
         aria-label={`Genre filter${selectedGenre ? `: ${selectedGenre.name}` : ''}`}
         className={`press shrink-0 whitespace-nowrap border px-3 py-1.5 font-sans text-[11px] font-medium uppercase tracking-[0.14em] transition-colors duration-200 ${
           selected !== null || open
@@ -158,7 +159,7 @@ function GenrePicker({
       </button>
 
       {open && (
-        <div className="quiet-scroll animate-[ct-tick_180ms_var(--ease-sheet)_both] absolute right-0 top-[calc(100%+6px)] z-50 max-h-[min(70vh,460px)] w-[320px] max-w-[calc(100vw-32px)] origin-top-right overflow-y-auto border border-border bg-background p-4 shadow-[0_16px_48px_rgba(0,0,0,0.35)] sm:w-[380px]">
+        <div id="discover-genre-filter" role="dialog" aria-label="Filter by genre" className="quiet-scroll animate-[ct-tick_180ms_var(--ease-sheet)_both] absolute right-0 top-[calc(100%+6px)] z-50 max-h-[min(70vh,460px)] w-[320px] max-w-[calc(100vw-32px)] origin-top-right overflow-y-auto border border-border bg-background p-4 shadow-[0_16px_48px_rgba(0,0,0,0.35)] sm:w-[380px]">
           <div className="mb-3 flex items-center justify-between border-b border-border pb-2">
             <span className="rule-label">Filter by genre</span>
             {selected !== null && (
@@ -607,10 +608,13 @@ export default function Discover({ onOpen }: { onOpen: (t: MediaType, id: number
                 onClick={() => {
                   setError(null)
                   setLoading(true)
-                  const token = feedToken.current
+                  const token = ++feedToken.current
                   const controller = new AbortController()
                   feedControllerRef.current?.abort()
                   feedControllerRef.current = controller
+                  setResults([])
+                  setPage(1)
+                  setTotalPages(1)
                   loadingRef.current = true
                   fetchPage(1, controller.signal)
                     .then((r) => {
