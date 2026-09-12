@@ -1862,7 +1862,7 @@ function Seasons({
                 {eps?.map((e, i) => {
                   const loggedAt = watched[epKey(s.season_number, e.episode_number)]
                   const done = loggedAt != null
-                  const descriptionHidden = hideDescriptions && !done
+                  const descriptionHidden = hideDescriptions
                   return (
                     <div
                       key={e.id}

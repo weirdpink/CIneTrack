@@ -248,7 +248,7 @@ export default function SettingsPanel({ open, onClose }: { open: boolean; onClos
             />
             <Toggle
               label="Hide episode descriptions"
-              note="Hide descriptions for unwatched installments."
+              note="Hide descriptions for every installment."
               value={settings.hideSpoilers}
               onChange={(v) => set('hideSpoilers', v)}
             />
